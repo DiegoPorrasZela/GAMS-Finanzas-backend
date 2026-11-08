@@ -29,7 +29,8 @@ public class JwtService {
     }
 
     public Jwt generar(Usuario usuario) {
-        Instant ahora = Instant.now();
+        // Los tokens JWT manejan segundos; así "expiraEn" sale sin nanosegundos (ej. 2026-11-09T06:35:34Z)
+        Instant ahora = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 
         // Patrón Builder: el token se arma dato por dato
         JwtClaimsSet datos = JwtClaimsSet.builder()
