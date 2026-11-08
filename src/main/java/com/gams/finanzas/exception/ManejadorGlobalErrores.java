@@ -22,6 +22,11 @@ public class ManejadorGlobalErrores {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ProblemDetail credencialesInvalidas(CredencialesInvalidasException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+    }
+
     @ExceptionHandler(ConflictoException.class)
     public ProblemDetail conflicto(ConflictoException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());

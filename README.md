@@ -7,7 +7,8 @@ Frontend (Angular): <https://github.com/DiegoPorrasZela/GAMS-Finanzas>
 
 ## Tecnologías
 
-- Java 21 y Spring Boot 4.1 (Web MVC, Data JPA, Security, Validation)
+- Java 21 y Spring Boot 4.1 (Web MVC, Data JPA, Validation)
+- Spring Security con tokens JWT (HMAC-SHA256) y contraseñas con BCrypt
 - PostgreSQL (Neon en la nube) con migraciones Flyway
 - Maven (incluye `mvnw`, no hace falta instalarlo)
 
@@ -22,8 +23,20 @@ repository/   Acceso a datos con Spring Data JPA
 entity/       Tablas de la base de datos mapeadas con JPA
 dto/          Objetos que entran y salen del API (nunca se expone una entidad)
 exception/    Errores del negocio y su conversión a respuestas JSON (ProblemDetail)
-config/       Seguridad, CORS y datos iniciales
+config/       Seguridad (JWT, roles, CORS) y datos iniciales
 ```
+
+## Seguridad
+
+- **Autenticación:** `POST /api/auth/login` (o `/registro`) devuelve un **token JWT** firmado que dura 8 horas.
+  El cliente lo envía en cada petición con el header `Authorization: Bearer <token>`. El servidor no guarda
+  sesiones (stateless): la sesión es el token, y cerrar sesión es descartarlo.
+- **Autorización por rol:** el token lleva el rol del usuario. `USUARIO` gestiona sus movimientos y ve las
+  categorías; `ADMIN` además crea, edita y elimina categorías y gestiona usuarios.
+- **Autorización por dueño:** el id del usuario sale del token, nunca del cuerpo de la petición. Un movimiento
+  de otro usuario responde `404`, como si no existiera.
+- Las contraseñas se guardan con **BCrypt**. Un token alterado (por ejemplo, cambiando el rol) se rechaza
+  porque su firma deja de ser válida.
 
 ## Base de datos (3FN)
 
@@ -41,17 +54,23 @@ transitiva y rompería la Tercera Forma Normal.
 
 ## Endpoints
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| GET | `/api/movimientos` | Movimientos del usuario, del más reciente al más antiguo |
-| GET | `/api/movimientos/{id}` | Un movimiento del usuario |
-| POST | `/api/movimientos` | Registrar un movimiento |
-| PUT | `/api/movimientos/{id}` | Editar un movimiento |
-| DELETE | `/api/movimientos/{id}` | Eliminar un movimiento |
-| GET | `/api/categorias` | Listar categorías |
-| POST | `/api/categorias` | Crear categoría |
-| PUT | `/api/categorias/{id}` | Editar categoría (no se puede cambiar el tipo si ya tiene movimientos) |
-| DELETE | `/api/categorias/{id}` | Eliminar categoría (solo si no tiene movimientos) |
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/api/auth/registro` | Público | Crear cuenta (rol USUARIO); devuelve el token |
+| POST | `/api/auth/login` | Público | Iniciar sesión; devuelve el token |
+| GET | `/api/auth/yo` | Con sesión | Datos del usuario de la sesión |
+| GET | `/api/estado` | Público | Comprobar que el API está en línea |
+| GET | `/api/movimientos` | Con sesión | Mis movimientos, del más reciente al más antiguo |
+| GET | `/api/movimientos/{id}` | Con sesión | Uno de mis movimientos |
+| POST | `/api/movimientos` | Con sesión | Registrar un movimiento |
+| PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
+| DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
+| GET | `/api/categorias` | Con sesión | Listar categorías |
+| POST | `/api/categorias` | ADMIN | Crear categoría |
+| PUT | `/api/categorias/{id}` | ADMIN | Editar categoría (no se puede cambiar el tipo si ya tiene movimientos) |
+| DELETE | `/api/categorias/{id}` | ADMIN | Eliminar categoría (solo si no tiene movimientos) |
+| GET | `/api/usuarios` | ADMIN | Listar usuarios |
+| DELETE | `/api/usuarios/{id}` | ADMIN | Eliminar un usuario y sus movimientos (no la propia cuenta) |
 
 Ejemplo de cuerpo para crear un movimiento:
 
@@ -60,13 +79,14 @@ Ejemplo de cuerpo para crear un movimiento:
 ```
 
 Los errores se devuelven en formato [ProblemDetail](https://www.rfc-editor.org/rfc/rfc9457) con el código HTTP
-correspondiente: `400` datos inválidos (con un mensaje por campo), `404` no existe y `409` regla de negocio.
+correspondiente: `400` datos inválidos (con un mensaje por campo), `401` sin sesión o credenciales incorrectas,
+`403` el rol no tiene permiso, `404` no existe y `409` regla de negocio.
 
 ## Cómo ejecutar
 
 Requisitos: JDK 21 y una base de datos PostgreSQL (local o en [Neon](https://neon.tech)).
 
-1. Copia `.env.example` como `.env` y completa los datos de conexión.
+1. Copia `.env.example` como `.env` y completa los datos de conexión y `JWT_SECRETO`.
 2. Ejecuta:
 
    ```bash
