@@ -48,6 +48,9 @@ public class SecurityConfig {
                         // Públicas
                         .requestMatchers(HttpMethod.POST, "/api/auth/registro", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/estado").permitAll()
+                        // Página interna de errores de Spring: si se bloquea, cualquier error en una ruta
+                        // pública (ej. JSON mal formado en el registro) se vería como un falso 401
+                        .requestMatchers("/error").permitAll()
                         // Cualquier usuario con sesión puede ver las categorías...
                         .requestMatchers(HttpMethod.GET, "/api/categorias").authenticated()
                         // ...pero solo el administrador las crea, edita o elimina, y gestiona usuarios

@@ -14,7 +14,25 @@ Frontend (Angular): <https://github.com/DiegoPorrasZela/GAMS-Finanzas>
 
 ## Arquitectura
 
-Arquitectura en capas: cada capa solo conoce a la de abajo.
+```mermaid
+flowchart LR
+    U["Navegador"] --> F["Frontend Angular<br/>(Vercel)"]
+    F -- "HTTPS + token JWT" --> B["API REST Spring Boot<br/>(Render)"]
+    F -- "HTTPS" --> X["API Frankfurter<br/>(tipo de cambio)"]
+    B -- "JDBC + SSL" --> D[("PostgreSQL<br/>(Neon)")]
+```
+
+El backend sigue una **arquitectura en capas**: cada capa solo conoce a la de abajo.
+
+```mermaid
+flowchart TB
+    P["Petición HTTP"] --> S["Filtros de seguridad<br/>(CORS, validación del JWT, reglas por rol)"]
+    S --> C["controller<br/>recibe y valida, responde DTOs"]
+    C --> SV["service<br/>reglas de negocio y transacciones"]
+    SV --> R["repository<br/>Spring Data JPA"]
+    R --> DB[("PostgreSQL")]
+    C -.->|si algo falla| E["ManejadorGlobalErrores<br/>respuesta ProblemDetail"]
+```
 
 ```
 controller/   Endpoints REST: reciben y validan la petición, devuelven DTOs
@@ -37,10 +55,58 @@ config/       Seguridad (JWT, roles, CORS) y datos iniciales
   de otro usuario responde `404`, como si no existiera.
 - Las contraseñas se guardan con **BCrypt**. Un token alterado (por ejemplo, cambiando el rol) se rechaza
   porque su firma deja de ser válida.
+- Ningún secreto está en el repositorio: la conexión a la base de datos, la clave de los tokens y la
+  contraseña del administrador llegan por variables de entorno.
+
+## Patrones de diseño
+
+| Patrón | Dónde se usa | Para qué |
+|---|---|---|
+| Arquitectura en capas (MVC) | `controller` → `service` → `repository` | Cada capa tiene una sola responsabilidad |
+| Repository | `repository/*Repository` (Spring Data JPA) | Acceder a los datos sin escribir SQL en la lógica |
+| DTO | `dto/*Request`, `dto/*Response` | No exponer las entidades ni la contraseña; validar la entrada |
+| Factory Method | `MovimientoResponse.desde(...)`, `UsuarioResponse.desde(...)` | Crear un DTO a partir de una entidad en un solo lugar |
+| Builder | `JwtClaimsSet.builder()` en `JwtService` | Armar el token dato por dato |
+| Inyección de dependencias / Singleton | Constructores de servicios y controladores (beans de Spring) | Bajo acoplamiento; una sola instancia de cada servicio |
+| Chain of Responsibility | Cadena de filtros de `SecurityConfig` | Cada filtro (CORS, JWT, permisos) decide si la petición sigue |
+| Strategy | `PasswordEncoder` (BCrypt), `JwtEncoder`/`JwtDecoder` | Cambiar el algoritmo sin tocar el código que lo usa |
+| Template Method | `ManejadorGlobalErrores` extiende `ResponseEntityExceptionHandler` | Reutilizar el manejo de errores de Spring y cambiar solo los mensajes |
 
 ## Base de datos (3FN)
 
 El esquema está en [`src/main/resources/db/migration`](src/main/resources/db/migration) y Flyway lo crea al iniciar.
+
+```mermaid
+erDiagram
+    ROL ||--o{ USUARIO : "tiene"
+    USUARIO ||--o{ MOVIMIENTO : "registra"
+    CATEGORIA ||--o{ MOVIMIENTO : "clasifica"
+
+    ROL {
+        bigint id PK
+        varchar nombre UK "ADMIN o USUARIO"
+    }
+    USUARIO {
+        bigint id PK
+        varchar nombre
+        varchar email UK
+        varchar password "hash BCrypt"
+        bigint rol_id FK
+    }
+    CATEGORIA {
+        bigint id PK
+        varchar nombre "único junto con tipo"
+        varchar tipo "INGRESO o GASTO"
+    }
+    MOVIMIENTO {
+        bigint id PK
+        bigint usuario_id FK
+        bigint categoria_id FK
+        varchar descripcion
+        numeric monto "mayor a 0"
+        date fecha
+    }
+```
 
 | Tabla | Columnas |
 |---|---|
@@ -49,8 +115,13 @@ El esquema está en [`src/main/resources/db/migration`](src/main/resources/db/mi
 | `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`); nombre + tipo es único |
 | `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha |
 
-`movimiento` no guarda el tipo: lo toma de su categoría. Guardarlo en las dos tablas sería una dependencia
-transitiva y rompería la Tercera Forma Normal.
+Cómo cumple cada forma normal:
+
+- **1FN:** todos los valores son atómicos (un solo dato por columna) y cada tabla tiene clave primaria.
+- **2FN:** las claves primarias son simples (`id`), así que ningún atributo depende de una parte de la clave.
+- **3FN:** ningún atributo depende de otro que no sea la clave. `movimiento` no guarda el tipo (lo toma de su
+  categoría) y `usuario` no guarda el nombre del rol (solo `rol_id`). Guardarlos sería una dependencia
+  transitiva y podría dejar datos contradictorios.
 
 ## Endpoints
 
@@ -95,6 +166,8 @@ Requisitos: JDK 21 y una base de datos PostgreSQL (local o en [Neon](https://neo
 
 3. El API queda en <http://localhost:8080/api>.
 
-Al primer inicio se crean dos usuarios: `admin@gams.pe` / `admin123` (ADMIN) y `demo@gams.pe` / `demo123`
-(USUARIO, con movimientos de ejemplo). En producción sus contraseñas se cambian con las variables
-`ADMIN_PASSWORD` y `DEMO_PASSWORD`.
+Al iniciar se crean dos usuarios si no existen:
+
+- `admin@gams.pe` (ADMIN): su contraseña es la de `ADMIN_PASSWORD`. Si se cambia esa variable, la
+  contraseña se actualiza en el siguiente inicio.
+- `demo@gams.pe` / `demo123` (USUARIO, con movimientos de ejemplo): cuenta pública para probar la aplicación.

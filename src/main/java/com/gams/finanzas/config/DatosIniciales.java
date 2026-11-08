@@ -60,12 +60,24 @@ public class DatosIniciales implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        if (!usuarioRepository.existsByEmail(adminEmail)) {
-            crearUsuario("Administrador", adminEmail, adminPassword, Rol.ADMIN);
+        if (adminPassword.length() < 8) {
+            throw new IllegalStateException("ADMIN_PASSWORD debe tener al menos 8 caracteres");
         }
+        usuarioRepository.findByEmail(adminEmail).ifPresentOrElse(
+                this::sincronizarPasswordAdmin,
+                () -> crearUsuario("Administrador", adminEmail, adminPassword, Rol.ADMIN));
+
         if (!usuarioRepository.existsByEmail(EMAIL_DEMO)) {
             Usuario demo = crearUsuario("Usuario Demo", EMAIL_DEMO, demoPassword, Rol.USUARIO);
             crearMovimientosDeEjemplo(demo);
+        }
+    }
+
+    /** Si ADMIN_PASSWORD cambió, actualiza la contraseña guardada: así se cambia sin tocar la base de datos. */
+    private void sincronizarPasswordAdmin(Usuario admin) {
+        if (!passwordEncoder.matches(adminPassword, admin.getPassword())) {
+            admin.cambiarPassword(passwordEncoder.encode(adminPassword));
+            log.info("Contraseña del administrador actualizada desde ADMIN_PASSWORD");
         }
     }
 

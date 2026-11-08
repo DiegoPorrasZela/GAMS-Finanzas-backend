@@ -42,6 +42,11 @@ public class Usuario {
         this.rol = rol;
     }
 
+    /** Recibe la contraseña ya encriptada con BCrypt. */
+    public void cambiarPassword(String passwordEncriptada) {
+        this.password = passwordEncriptada;
+    }
+
     public Long getId() {
         return id;
     }
