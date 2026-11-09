@@ -14,6 +14,9 @@ import jakarta.persistence.Table;
 @Table(name = "categoria")
 public class Categoria {
 
+    /** Categoría del sistema para el dinero con el que empieza el usuario (una sola vez por usuario). */
+    public static final String SALDO_INICIAL = "Saldo inicial";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -37,6 +40,10 @@ public class Categoria {
     public void actualizar(String nombre, TipoMovimiento tipo) {
         this.nombre = nombre;
         this.tipo = tipo;
+    }
+
+    public boolean esSaldoInicial() {
+        return tipo == TipoMovimiento.INGRESO && SALDO_INICIAL.equals(nombre);
     }
 
     public Long getId() {

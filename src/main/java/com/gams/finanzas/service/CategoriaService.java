@@ -34,6 +34,7 @@ public class CategoriaService {
     @Transactional
     public CategoriaResponse crear(CategoriaRequest datos) {
         String nombre = datos.nombre().trim();
+        validarNombreNoReservado(nombre);
         if (categoriaRepository.existsByNombreIgnoreCaseAndTipo(nombre, datos.tipo())) {
             throw new ConflictoException("Ya existe la categoría \"" + nombre + "\" de tipo " + datos.tipo());
         }
@@ -44,7 +45,9 @@ public class CategoriaService {
     @Transactional
     public CategoriaResponse actualizar(Long id, CategoriaRequest datos) {
         Categoria categoria = buscarEntidad(id);
+        validarNoEsDelSistema(categoria);
         String nombre = datos.nombre().trim();
+        validarNombreNoReservado(nombre);
 
         if (categoriaRepository.existsByNombreIgnoreCaseAndTipoAndIdNot(nombre, datos.tipo(), id)) {
             throw new ConflictoException("Ya existe la categoría \"" + nombre + "\" de tipo " + datos.tipo());
@@ -61,10 +64,24 @@ public class CategoriaService {
     @Transactional
     public void eliminar(Long id) {
         Categoria categoria = buscarEntidad(id);
+        validarNoEsDelSistema(categoria);
         if (movimientoRepository.existsByCategoriaId(id)) {
             throw new ConflictoException("No se puede eliminar una categoría que ya tiene movimientos");
         }
         categoriaRepository.delete(categoria);
+    }
+
+    /** "Saldo inicial" sostiene la regla de un solo saldo inicial por usuario: no se renombra ni se borra. */
+    private static void validarNoEsDelSistema(Categoria categoria) {
+        if (categoria.esSaldoInicial()) {
+            throw new ConflictoException("\"" + Categoria.SALDO_INICIAL + "\" es una categoría del sistema y no se puede modificar");
+        }
+    }
+
+    private static void validarNombreNoReservado(String nombre) {
+        if (nombre.equalsIgnoreCase(Categoria.SALDO_INICIAL)) {
+            throw new ConflictoException("\"" + Categoria.SALDO_INICIAL + "\" es un nombre reservado del sistema");
+        }
     }
 
     /** Usado también por MovimientoService para validar la categoría elegida. */

@@ -10,6 +10,7 @@ import com.gams.finanzas.dto.MovimientoResponse;
 import com.gams.finanzas.entity.Categoria;
 import com.gams.finanzas.entity.Movimiento;
 import com.gams.finanzas.entity.Usuario;
+import com.gams.finanzas.exception.ConflictoException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
 import com.gams.finanzas.repository.MovimientoRepository;
 import com.gams.finanzas.repository.UsuarioRepository;
@@ -52,6 +53,9 @@ public class MovimientoService {
     public MovimientoResponse crear(MovimientoRequest datos, Long usuarioId) {
         Usuario usuario = usuarioRepository.getReferenceById(usuarioId);
         Categoria categoria = categoriaService.buscarEntidad(datos.categoriaId());
+        if (categoria.esSaldoInicial() && movimientoRepository.existsByUsuarioIdAndCategoriaId(usuarioId, categoria.getId())) {
+            throw saldoInicialRepetido();
+        }
 
         Movimiento movimiento = new Movimiento(usuario, datos.descripcion().trim(), datos.monto(), datos.fecha(),
                 categoria);
@@ -62,6 +66,10 @@ public class MovimientoService {
     public MovimientoResponse actualizar(Long id, MovimientoRequest datos, Long usuarioId) {
         Movimiento movimiento = buscarPropio(id, usuarioId);
         Categoria categoria = categoriaService.buscarEntidad(datos.categoriaId());
+        if (categoria.esSaldoInicial()
+                && movimientoRepository.existsByUsuarioIdAndCategoriaIdAndIdNot(usuarioId, categoria.getId(), id)) {
+            throw saldoInicialRepetido();
+        }
 
         movimiento.actualizar(datos.descripcion().trim(), datos.monto(), datos.fecha(), categoria);
         return MovimientoResponse.desde(movimiento);
@@ -70,6 +78,11 @@ public class MovimientoService {
     @Transactional
     public void eliminar(Long id, Long usuarioId) {
         movimientoRepository.delete(buscarPropio(id, usuarioId));
+    }
+
+    /** El saldo inicial es el dinero con el que se empieza: se registra una sola vez (si cambia, se edita). */
+    private static ConflictoException saldoInicialRepetido() {
+        return new ConflictoException("Ya registraste tu saldo inicial. Si cambió, edita el que ya tienes.");
     }
 
     /** Si el movimiento es de otro usuario responde 404, igual que si no existiera (no revela que existe). */

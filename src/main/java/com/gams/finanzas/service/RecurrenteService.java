@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.gams.finanzas.dto.RecurrenteCambioRequest;
 import com.gams.finanzas.dto.RecurrenteRequest;
 import com.gams.finanzas.dto.RecurrenteResponse;
+import com.gams.finanzas.entity.Categoria;
 import com.gams.finanzas.entity.MovimientoRecurrente;
 import com.gams.finanzas.exception.DatosInvalidosException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
@@ -52,9 +53,9 @@ public class RecurrenteService {
         if (datos.fecha().isBefore(hoy.minusYears(1))) {
             throw new DatosInvalidosException("El primer registro no puede ser de hace más de un año");
         }
+        Categoria categoria = categoriaValida(datos.categoriaId());
         MovimientoRecurrente recurrente = recurrenteRepository.save(new MovimientoRecurrente(
-                usuarioRepository.getReferenceById(usuarioId),
-                categoriaService.buscarEntidad(datos.categoriaId()),
+                usuarioRepository.getReferenceById(usuarioId), categoria,
                 datos.descripcion().trim(), datos.monto(), datos.fecha()));
         movimientoRepository.saveAll(recurrente.generarHasta(hoy));
         return RecurrenteResponse.desde(recurrente);
@@ -63,8 +64,7 @@ public class RecurrenteService {
     @Transactional
     public RecurrenteResponse actualizar(Long id, RecurrenteCambioRequest datos, Long usuarioId) {
         MovimientoRecurrente recurrente = buscarPropio(id, usuarioId);
-        recurrente.actualizar(datos.descripcion().trim(), datos.monto(),
-                categoriaService.buscarEntidad(datos.categoriaId()));
+        recurrente.actualizar(datos.descripcion().trim(), datos.monto(), categoriaValida(datos.categoriaId()));
         if (datos.activo() && !recurrente.isActivo()) {
             recurrente.reanudar(LocalDate.now());
         } else if (!datos.activo() && recurrente.isActivo()) {
@@ -86,6 +86,14 @@ public class RecurrenteService {
         for (MovimientoRecurrente recurrente : recurrenteRepository.buscarPendientes(usuarioId, hoy)) {
             movimientoRepository.saveAll(recurrente.generarHasta(hoy));
         }
+    }
+
+    private Categoria categoriaValida(Long categoriaId) {
+        Categoria categoria = categoriaService.buscarEntidad(categoriaId);
+        if (categoria.esSaldoInicial()) {
+            throw new DatosInvalidosException("El saldo inicial se registra una sola vez: no puede repetirse cada mes");
+        }
+        return categoria;
     }
 
     private MovimientoRecurrente buscarPropio(Long id, Long usuarioId) {

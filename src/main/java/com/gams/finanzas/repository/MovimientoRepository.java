@@ -23,6 +23,10 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
 
     boolean existsByCategoriaId(Long categoriaId);
 
+    boolean existsByUsuarioIdAndCategoriaId(Long usuarioId, Long categoriaId);
+
+    boolean existsByUsuarioIdAndCategoriaIdAndIdNot(Long usuarioId, Long categoriaId, Long id);
+
     /** Total de ingresos o de gastos de un usuario (para calcular su saldo). */
     @Query("""
             SELECT COALESCE(SUM(m.monto), 0) FROM Movimiento m
