@@ -2,6 +2,8 @@ package com.gams.finanzas.config;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.YearMonth;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,12 +14,16 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.gams.finanzas.entity.Categoria;
+import com.gams.finanzas.entity.MetaAhorro;
 import com.gams.finanzas.entity.Movimiento;
+import com.gams.finanzas.entity.PresupuestoMensual;
 import com.gams.finanzas.entity.Rol;
 import com.gams.finanzas.entity.TipoMovimiento;
 import com.gams.finanzas.entity.Usuario;
 import com.gams.finanzas.repository.CategoriaRepository;
+import com.gams.finanzas.repository.MetaAhorroRepository;
 import com.gams.finanzas.repository.MovimientoRepository;
+import com.gams.finanzas.repository.PresupuestoMensualRepository;
 import com.gams.finanzas.repository.RolRepository;
 import com.gams.finanzas.repository.UsuarioRepository;
 
@@ -36,6 +42,8 @@ public class DatosIniciales implements CommandLineRunner {
     private final RolRepository rolRepository;
     private final CategoriaRepository categoriaRepository;
     private final MovimientoRepository movimientoRepository;
+    private final PresupuestoMensualRepository presupuestoRepository;
+    private final MetaAhorroRepository metaRepository;
     private final PasswordEncoder passwordEncoder;
     private final String adminEmail;
     private final String adminPassword;
@@ -43,6 +51,7 @@ public class DatosIniciales implements CommandLineRunner {
 
     public DatosIniciales(UsuarioRepository usuarioRepository, RolRepository rolRepository,
             CategoriaRepository categoriaRepository, MovimientoRepository movimientoRepository,
+            PresupuestoMensualRepository presupuestoRepository, MetaAhorroRepository metaRepository,
             PasswordEncoder passwordEncoder,
             @Value("${app.admin.email}") String adminEmail,
             @Value("${app.admin.password}") String adminPassword,
@@ -51,6 +60,8 @@ public class DatosIniciales implements CommandLineRunner {
         this.rolRepository = rolRepository;
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
+        this.presupuestoRepository = presupuestoRepository;
+        this.metaRepository = metaRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminEmail = adminEmail;
         this.adminPassword = adminPassword;
@@ -71,6 +82,32 @@ public class DatosIniciales implements CommandLineRunner {
             Usuario demo = crearUsuario("Usuario Demo", EMAIL_DEMO, demoPassword, Rol.USUARIO);
             crearMovimientosDeEjemplo(demo);
         }
+
+        usuarioRepository.findByEmail(EMAIL_DEMO).ifPresent(demo -> {
+            if (!presupuestoRepository.existsByUsuarioId(demo.getId())
+                    && !metaRepository.existsByUsuarioId(demo.getId())) {
+                crearPlanDeEjemplo(demo);
+            }
+        });
+    }
+
+    /** Presupuesto del mes actual y dos metas con aportes para la cuenta demo. */
+    private void crearPlanDeEjemplo(Usuario demo) {
+        log.info("Creando presupuesto y metas de ejemplo para {}", demo.getEmail());
+        YearMonth actual = YearMonth.now();
+        presupuestoRepository.save(new PresupuestoMensual(demo, actual.getYear(), actual.getMonthValue(),
+                new BigDecimal("600"), new BigDecimal("300")));
+
+        MetaAhorro laptop = new MetaAhorro(demo, "Laptop para la universidad", new BigDecimal("2500"),
+                actual.plusMonths(6).atEndOfMonth());
+        laptop.aportar(new BigDecimal("300"), LocalDate.now().minusDays(40));
+        laptop.aportar(new BigDecimal("250"), LocalDate.now().minusDays(10));
+
+        MetaAhorro viaje = new MetaAhorro(demo, "Viaje de fin de ciclo", new BigDecimal("800"),
+                actual.plusMonths(2).atEndOfMonth());
+        viaje.aportar(new BigDecimal("150"), LocalDate.now().minusDays(5));
+
+        metaRepository.saveAll(List.of(laptop, viaje));
     }
 
     /** Si ADMIN_PASSWORD cambió, actualiza la contraseña guardada: así se cambia sin tocar la base de datos. */
