@@ -43,13 +43,28 @@ public class Movimiento {
     @Column(nullable = false)
     private LocalDate fecha;
 
+    /** Repetición mensual que lo generó; null si lo registró el usuario a mano. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recurrente_id")
+    private MovimientoRecurrente recurrente;
+
     protected Movimiento() {
         // Requerido por JPA
     }
 
     public Movimiento(Usuario usuario, String descripcion, BigDecimal monto, LocalDate fecha, Categoria categoria) {
+        this(usuario, descripcion, monto, fecha, categoria, null);
+    }
+
+    public Movimiento(Usuario usuario, String descripcion, BigDecimal monto, LocalDate fecha, Categoria categoria,
+            MovimientoRecurrente recurrente) {
         this.usuario = usuario;
+        this.recurrente = recurrente;
         actualizar(descripcion, monto, fecha, categoria);
+    }
+
+    public boolean esAutomatico() {
+        return recurrente != null;
     }
 
     public void actualizar(String descripcion, BigDecimal monto, LocalDate fecha, Categoria categoria) {

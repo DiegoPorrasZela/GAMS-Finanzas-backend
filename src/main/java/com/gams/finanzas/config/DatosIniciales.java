@@ -16,12 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 import com.gams.finanzas.entity.Categoria;
 import com.gams.finanzas.entity.MetaAhorro;
 import com.gams.finanzas.entity.Movimiento;
+import com.gams.finanzas.entity.MovimientoRecurrente;
 import com.gams.finanzas.entity.PresupuestoMensual;
 import com.gams.finanzas.entity.Rol;
 import com.gams.finanzas.entity.TipoMovimiento;
 import com.gams.finanzas.entity.Usuario;
 import com.gams.finanzas.repository.CategoriaRepository;
 import com.gams.finanzas.repository.MetaAhorroRepository;
+import com.gams.finanzas.repository.MovimientoRecurrenteRepository;
 import com.gams.finanzas.repository.MovimientoRepository;
 import com.gams.finanzas.repository.PresupuestoMensualRepository;
 import com.gams.finanzas.repository.RolRepository;
@@ -44,6 +46,7 @@ public class DatosIniciales implements CommandLineRunner {
     private final MovimientoRepository movimientoRepository;
     private final PresupuestoMensualRepository presupuestoRepository;
     private final MetaAhorroRepository metaRepository;
+    private final MovimientoRecurrenteRepository recurrenteRepository;
     private final PasswordEncoder passwordEncoder;
     private final String adminEmail;
     private final String adminPassword;
@@ -52,7 +55,7 @@ public class DatosIniciales implements CommandLineRunner {
     public DatosIniciales(UsuarioRepository usuarioRepository, RolRepository rolRepository,
             CategoriaRepository categoriaRepository, MovimientoRepository movimientoRepository,
             PresupuestoMensualRepository presupuestoRepository, MetaAhorroRepository metaRepository,
-            PasswordEncoder passwordEncoder,
+            MovimientoRecurrenteRepository recurrenteRepository, PasswordEncoder passwordEncoder,
             @Value("${app.admin.email}") String adminEmail,
             @Value("${app.admin.password}") String adminPassword,
             @Value("${app.demo.password}") String demoPassword) {
@@ -62,6 +65,7 @@ public class DatosIniciales implements CommandLineRunner {
         this.movimientoRepository = movimientoRepository;
         this.presupuestoRepository = presupuestoRepository;
         this.metaRepository = metaRepository;
+        this.recurrenteRepository = recurrenteRepository;
         this.passwordEncoder = passwordEncoder;
         this.adminEmail = adminEmail;
         this.adminPassword = adminPassword;
@@ -88,7 +92,25 @@ public class DatosIniciales implements CommandLineRunner {
                     && !metaRepository.existsByUsuarioId(demo.getId())) {
                 crearPlanDeEjemplo(demo);
             }
+            if (!recurrenteRepository.existsByUsuarioId(demo.getId())) {
+                crearAutomaticosDeEjemplo(demo);
+            }
         });
+    }
+
+    /** Sueldo y plan de celular automáticos desde el próximo mes (los de este mes ya están registrados). */
+    private void crearAutomaticosDeEjemplo(Usuario demo) {
+        log.info("Creando movimientos automáticos de ejemplo para {}", demo.getEmail());
+        YearMonth siguiente = YearMonth.now().plusMonths(1);
+        recurrenteRepository.saveAll(List.of(
+                new MovimientoRecurrente(demo, categoria("Sueldo", TipoMovimiento.INGRESO), "Pago de prácticas",
+                        new BigDecimal("1500"), siguiente.atDay(7)),
+                new MovimientoRecurrente(demo, categoria("Servicios", TipoMovimiento.GASTO), "Plan de celular",
+                        new BigDecimal("45"), siguiente.atDay(2))));
+    }
+
+    private Categoria categoria(String nombre, TipoMovimiento tipo) {
+        return categoriaRepository.findByNombreAndTipo(nombre, tipo).orElseThrow();
     }
 
     /** Presupuesto del mes actual y dos metas con aportes para la cuenta demo. */

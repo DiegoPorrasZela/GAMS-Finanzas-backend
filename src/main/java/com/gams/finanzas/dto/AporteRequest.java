@@ -5,6 +5,7 @@ import java.time.LocalDate;
 
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Positive;
 
 public record AporteRequest(
@@ -15,5 +16,6 @@ public record AporteRequest(
         BigDecimal monto,
 
         @NotNull(message = "La fecha es obligatoria")
+        @PastOrPresent(message = "La fecha no puede ser futura")
         LocalDate fecha) {
 }

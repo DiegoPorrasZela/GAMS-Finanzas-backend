@@ -15,7 +15,8 @@ public record MovimientoResponse(
         LocalDate fecha,
         TipoMovimiento tipo,
         Long categoriaId,
-        String categoria) {
+        String categoria,
+        boolean automatico) {
 
     public static MovimientoResponse desde(Movimiento movimiento) {
         Categoria categoria = movimiento.getCategoria();
@@ -26,6 +27,7 @@ public record MovimientoResponse(
                 movimiento.getFecha(),
                 categoria.getTipo(),
                 categoria.getId(),
-                categoria.getNombre());
+                categoria.getNombre(),
+                movimiento.esAutomatico());
     }
 }

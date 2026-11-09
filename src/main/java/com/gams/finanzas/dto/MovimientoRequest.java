@@ -6,6 +6,7 @@ import java.time.LocalDate;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -21,7 +22,9 @@ public record MovimientoRequest(
         @Digits(integer = 10, fraction = 2, message = "El monto admite como máximo 2 decimales")
         BigDecimal monto,
 
+        // Se pueden registrar gastos de días anteriores (si el usuario se olvidó), pero no futuros
         @NotNull(message = "La fecha es obligatoria")
+        @PastOrPresent(message = "La fecha no puede ser futura")
         LocalDate fecha,
 
         @NotNull(message = "La categoría es obligatoria")

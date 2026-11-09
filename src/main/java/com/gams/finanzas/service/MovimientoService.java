@@ -24,16 +24,20 @@ public class MovimientoService {
     private final MovimientoRepository movimientoRepository;
     private final UsuarioRepository usuarioRepository;
     private final CategoriaService categoriaService;
+    private final RecurrenteService recurrenteService;
 
     public MovimientoService(MovimientoRepository movimientoRepository, UsuarioRepository usuarioRepository,
-            CategoriaService categoriaService) {
+            CategoriaService categoriaService, RecurrenteService recurrenteService) {
         this.movimientoRepository = movimientoRepository;
         this.usuarioRepository = usuarioRepository;
         this.categoriaService = categoriaService;
+        this.recurrenteService = recurrenteService;
     }
 
-    @Transactional(readOnly = true)
+    /** Antes de listar, registra los movimientos automáticos (sueldo, alquiler...) cuya fecha ya llegó. */
+    @Transactional
     public List<MovimientoResponse> listar(Long usuarioId) {
+        recurrenteService.generarPendientes(usuarioId);
         return movimientoRepository.findByUsuarioIdOrderByFechaDescIdDesc(usuarioId).stream()
                 .map(MovimientoResponse::desde)
                 .toList();
