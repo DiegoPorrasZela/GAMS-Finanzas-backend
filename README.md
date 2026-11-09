@@ -58,6 +58,22 @@ config/       Seguridad (JWT, roles, CORS) y datos iniciales
 - Ningún secreto está en el repositorio: la conexión a la base de datos, la clave de los tokens y la
   contraseña del administrador llegan por variables de entorno.
 
+## Reglas de negocio
+
+| Regla | Dónde se valida | Por qué |
+|---|---|---|
+| Un usuario solo ve y modifica sus propios datos | Servicios (el id sale del token) | Privacidad: lo ajeno responde 404 |
+| Los movimientos y aportes no pueden tener fecha futura (sí pasada) | DTO (`@PastOrPresent`) y front | Se puede registrar un gasto olvidado, pero no inventar uno que no ocurrió |
+| La fecha límite de una meta no puede estar en el pasado | DTO (`@FutureOrPresent`) y front | Una meta es un objetivo a futuro |
+| No se puede aportar a una meta más de lo disponible (saldo − lo ya separado en metas) | `MetaAhorroService` y front | No se puede separar dinero que no se tiene |
+| Un gasto que deja el saldo en negativo **se avisa, no se bloquea** | Front (confirmación) e Inicio (alerta) | La app registra la realidad: si el gasto ocurrió (ej. con tarjeta), bloquearlo haría perder el control |
+| La categoría "Saldo inicial" registra el dinero con el que se empieza | Migración V4 e Inicio | Sin ella, el saldo arranca en 0 y puede verse negativo |
+| Los automáticos se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar el mismo mes dos veces |
+| Al reanudar un automático no se registran los meses en pausa | `MovimientoRecurrente.reanudar()` | Pausar significa que esos meses no hubo ese ingreso o gasto |
+| No se puede borrar ni cambiar de tipo una categoría con movimientos | `CategoriaService` | Cambiaría el historial de los usuarios |
+| El presupuesto avisa si límite + ahorro supera los ingresos del mes | Front | Ayuda a planificar algo que sí se puede cumplir |
+| "Hoy" se calcula con la hora de Perú (`America/Lima`) | `GamsFinanzasApplication` | El servidor en la nube usa UTC |
+
 ## Patrones de diseño
 
 | Patrón | Dónde se usa | Para qué |
@@ -84,6 +100,9 @@ erDiagram
     USUARIO ||--o{ PRESUPUESTO_MENSUAL : "planifica"
     USUARIO ||--o{ META_AHORRO : "define"
     META_AHORRO ||--o{ APORTE : "recibe"
+    USUARIO ||--o{ MOVIMIENTO_RECURRENTE : "programa"
+    CATEGORIA ||--o{ MOVIMIENTO_RECURRENTE : "clasifica"
+    MOVIMIENTO_RECURRENTE |o--o{ MOVIMIENTO : "genera"
 
     ROL {
         bigint id PK
@@ -107,7 +126,18 @@ erDiagram
         bigint categoria_id FK
         varchar descripcion
         numeric monto "mayor a 0"
-        date fecha
+        date fecha "no futura"
+        bigint recurrente_id FK "opcional"
+    }
+    MOVIMIENTO_RECURRENTE {
+        bigint id PK
+        bigint usuario_id FK
+        bigint categoria_id FK
+        varchar descripcion
+        numeric monto
+        int dia "1 a 31"
+        date proximo_cargo
+        boolean activo
     }
     PRESUPUESTO_MENSUAL {
         bigint id PK
@@ -137,7 +167,8 @@ erDiagram
 | `rol` | id, nombre |
 | `usuario` | id, nombre, email (único), password (BCrypt), rol_id → rol |
 | `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`); nombre + tipo es único |
-| `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha |
+| `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha, recurrente_id → movimiento_recurrente (opcional) |
+| `movimiento_recurrente` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto, dia, proximo_cargo, activo |
 | `presupuesto_mensual` | id, usuario_id → usuario, anio, mes, limite_gasto, ahorro_objetivo; un plan por usuario y mes |
 | `meta_ahorro` | id, usuario_id → usuario, nombre, monto_objetivo, fecha_limite (opcional) |
 | `aporte` | id, meta_id → meta_ahorro, monto (> 0), fecha |
@@ -165,6 +196,10 @@ Cómo cumple cada forma normal:
 | POST | `/api/movimientos` | Con sesión | Registrar un movimiento |
 | PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
 | DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
+| GET | `/api/recurrentes` | Con sesión | Mis movimientos automáticos (se repiten cada mes) |
+| POST | `/api/recurrentes` | Con sesión | Crear un automático; registra de una vez los meses que ya llegaron |
+| PUT | `/api/recurrentes/{id}` | Con sesión | Editar, pausar o reanudar un automático |
+| DELETE | `/api/recurrentes/{id}` | Con sesión | Eliminar un automático (los movimientos ya registrados se conservan) |
 | GET | `/api/presupuestos` | Con sesión | Mis presupuestos mensuales |
 | PUT | `/api/presupuestos/{anio}/{mes}` | Con sesión | Crear o actualizar el presupuesto de un mes |
 | DELETE | `/api/presupuestos/{anio}/{mes}` | Con sesión | Eliminar el presupuesto de un mes |
