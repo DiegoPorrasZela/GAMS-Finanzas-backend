@@ -67,7 +67,8 @@ config/       Seguridad (JWT, roles, CORS) y datos iniciales
 | La fecha límite de una meta no puede estar en el pasado | DTO (`@FutureOrPresent`) y front | Una meta es un objetivo a futuro |
 | No se puede aportar a una meta más de lo disponible (saldo − lo ya separado en metas) | `MetaAhorroService` y front | No se puede separar dinero que no se tiene |
 | Un gasto que deja el saldo en negativo **se avisa, no se bloquea** | Front (confirmación) e Inicio (alerta) | La app registra la realidad: si el gasto ocurrió (ej. con tarjeta), bloquearlo haría perder el control |
-| La categoría "Saldo inicial" registra el dinero con el que se empieza | Migración V4 e Inicio | Sin ella, el saldo arranca en 0 y puede verse negativo |
+| El saldo inicial (dinero con el que se empieza) se registra **una sola vez** por usuario y no puede ser automático; si cambia, se edita | `MovimientoService`, `RecurrenteService` y front | Es un punto de partida, no un ingreso que se repite |
+| "Saldo inicial" es una categoría del sistema: no se puede renombrar, eliminar ni duplicar | `CategoriaService` | Si el admin la cambiara, la regla anterior dejaría de funcionar |
 | Los automáticos se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar el mismo mes dos veces |
 | Al reanudar un automático no se registran los meses en pausa | `MovimientoRecurrente.reanudar()` | Pausar significa que esos meses no hubo ese ingreso o gasto |
 | No se puede borrar ni cambiar de tipo una categoría con movimientos | `CategoriaService` | Cambiaría el historial de los usuarios |
