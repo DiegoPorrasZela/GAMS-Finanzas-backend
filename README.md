@@ -81,6 +81,9 @@ erDiagram
     ROL ||--o{ USUARIO : "tiene"
     USUARIO ||--o{ MOVIMIENTO : "registra"
     CATEGORIA ||--o{ MOVIMIENTO : "clasifica"
+    USUARIO ||--o{ PRESUPUESTO_MENSUAL : "planifica"
+    USUARIO ||--o{ META_AHORRO : "define"
+    META_AHORRO ||--o{ APORTE : "recibe"
 
     ROL {
         bigint id PK
@@ -106,6 +109,27 @@ erDiagram
         numeric monto "mayor a 0"
         date fecha
     }
+    PRESUPUESTO_MENSUAL {
+        bigint id PK
+        bigint usuario_id FK "único junto con anio y mes"
+        int anio
+        int mes "1 a 12"
+        numeric limite_gasto
+        numeric ahorro_objetivo
+    }
+    META_AHORRO {
+        bigint id PK
+        bigint usuario_id FK
+        varchar nombre
+        numeric monto_objetivo
+        date fecha_limite "opcional"
+    }
+    APORTE {
+        bigint id PK
+        bigint meta_id FK
+        numeric monto
+        date fecha
+    }
 ```
 
 | Tabla | Columnas |
@@ -114,6 +138,9 @@ erDiagram
 | `usuario` | id, nombre, email (único), password (BCrypt), rol_id → rol |
 | `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`); nombre + tipo es único |
 | `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha |
+| `presupuesto_mensual` | id, usuario_id → usuario, anio, mes, limite_gasto, ahorro_objetivo; un plan por usuario y mes |
+| `meta_ahorro` | id, usuario_id → usuario, nombre, monto_objetivo, fecha_limite (opcional) |
+| `aporte` | id, meta_id → meta_ahorro, monto (> 0), fecha |
 
 Cómo cumple cada forma normal:
 
@@ -122,6 +149,8 @@ Cómo cumple cada forma normal:
 - **3FN:** ningún atributo depende de otro que no sea la clave. `movimiento` no guarda el tipo (lo toma de su
   categoría) y `usuario` no guarda el nombre del rol (solo `rol_id`). Guardarlos sería una dependencia
   transitiva y podría dejar datos contradictorios.
+- **Datos calculados, no guardados:** lo gastado en un mes se obtiene de `movimiento` y lo ahorrado en una
+  meta es la suma de sus `aporte`. Guardar esos totales sería redundante y podrían quedar desactualizados.
 
 ## Endpoints
 
@@ -136,6 +165,15 @@ Cómo cumple cada forma normal:
 | POST | `/api/movimientos` | Con sesión | Registrar un movimiento |
 | PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
 | DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
+| GET | `/api/presupuestos` | Con sesión | Mis presupuestos mensuales |
+| PUT | `/api/presupuestos/{anio}/{mes}` | Con sesión | Crear o actualizar el presupuesto de un mes |
+| DELETE | `/api/presupuestos/{anio}/{mes}` | Con sesión | Eliminar el presupuesto de un mes |
+| GET | `/api/metas` | Con sesión | Mis metas de ahorro con su avance (ahorrado, faltante, %) |
+| POST | `/api/metas` | Con sesión | Crear una meta |
+| PUT | `/api/metas/{id}` | Con sesión | Editar una de mis metas |
+| DELETE | `/api/metas/{id}` | Con sesión | Eliminar una meta y sus aportes |
+| POST | `/api/metas/{id}/aportes` | Con sesión | Registrar un aporte (devuelve la meta actualizada) |
+| DELETE | `/api/metas/{id}/aportes/{aporteId}` | Con sesión | Eliminar un aporte |
 | GET | `/api/categorias` | Con sesión | Listar categorías |
 | POST | `/api/categorias` | ADMIN | Crear categoría |
 | PUT | `/api/categorias/{id}` | ADMIN | Editar categoría (no se puede cambiar el tipo si ya tiene movimientos) |
