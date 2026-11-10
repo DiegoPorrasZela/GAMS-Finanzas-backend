@@ -88,7 +88,9 @@ flowchart LR
 | Un gasto que deja el saldo en negativo **se avisa, no se bloquea** | Front (confirmación) e Inicio (alerta) | La app registra la realidad: si el gasto ocurrió (ej. con tarjeta), bloquearlo haría perder el control |
 | El saldo inicial (dinero con el que se empieza) se registra **una sola vez** por usuario y no puede ser automático; si cambia, se edita | `MovimientoService`, `RecurrenteService` y front | Es un punto de partida, no un ingreso que se repite |
 | "Saldo inicial", "Ahorro" y "Retiro de ahorros" son categorías del sistema: no se pueden renombrar, eliminar ni duplicar | `CategoriaService` | Si el admin las cambiara, las reglas de saldo inicial y ahorros dejarían de funcionar |
-| Los automáticos (diarios, semanales o mensuales) se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar la misma fecha dos veces |
+| Los automáticos (diarios, semanales, quincenales o mensuales) se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar la misma fecha dos veces |
+| Meses de distinto largo: si el día elegido no existe (29, 30, 31) se usa el último día del mes y el mes siguiente vuelve al día elegido; el día 31 es "último día del mes" y la quincena es el 15 y el último día | `MovimientoRecurrente` (probado con `MovimientoRecurrenteTest`) | Un sueldo de fin de mes debe llegar el 28, 29, 30 o 31 según el mes |
+| Un automático se puede programar a futuro: su primer registro es la primera fecha del calendario desde el día indicado | `MovimientoRecurrente` | Ej. creado el 9 con pago el 15, el primero llega el 15 |
 | Al reanudar un automático no se registran los meses en pausa | `MovimientoRecurrente.reanudar()` | Pausar significa que esos meses no hubo ese ingreso o gasto |
 | No se puede borrar ni cambiar de tipo una categoría con movimientos | `CategoriaService` | Cambiaría el historial de los usuarios |
 | El presupuesto avisa si límite + ahorro supera los ingresos del mes | Front | Ayuda a planificar algo que sí se puede cumplir |
@@ -155,8 +157,8 @@ erDiagram
         bigint categoria_id FK
         varchar descripcion
         numeric monto
-        varchar frecuencia "DIARIA, SEMANAL o MENSUAL"
-        int dia "1 a 31"
+        varchar frecuencia "DIARIA, SEMANAL, QUINCENAL o MENSUAL"
+        int dia "1 a 31 (31 = último día)"
         date proximo_cargo
         boolean activo
     }
@@ -219,7 +221,7 @@ Cómo cumple cada forma normal:
 | PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
 | DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
 | GET | `/api/recurrentes` | Con sesión | Mis movimientos automáticos (se repiten cada mes) |
-| POST | `/api/recurrentes` | Con sesión | Crear un automático (diario, semanal o mensual); registra de una vez las fechas que ya llegaron |
+| POST | `/api/recurrentes` | Con sesión | Crear un automático (diario, semanal, quincenal o mensual con día elegido); registra de una vez las fechas que ya llegaron |
 | PUT | `/api/recurrentes/{id}` | Con sesión | Editar, pausar o reanudar un automático |
 | DELETE | `/api/recurrentes/{id}` | Con sesión | Eliminar un automático (los movimientos ya registrados se conservan) |
 | GET | `/api/presupuestos` | Con sesión | Mis presupuestos mensuales |
