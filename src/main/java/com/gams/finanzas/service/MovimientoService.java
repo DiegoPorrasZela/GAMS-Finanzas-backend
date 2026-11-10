@@ -1,5 +1,6 @@
 package com.gams.finanzas.service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -26,13 +27,15 @@ public class MovimientoService {
     private final UsuarioRepository usuarioRepository;
     private final CategoriaService categoriaService;
     private final RecurrenteService recurrenteService;
+    private final AhorroService ahorroService;
 
     public MovimientoService(MovimientoRepository movimientoRepository, UsuarioRepository usuarioRepository,
-            CategoriaService categoriaService, RecurrenteService recurrenteService) {
+            CategoriaService categoriaService, RecurrenteService recurrenteService, AhorroService ahorroService) {
         this.movimientoRepository = movimientoRepository;
         this.usuarioRepository = usuarioRepository;
         this.categoriaService = categoriaService;
         this.recurrenteService = recurrenteService;
+        this.ahorroService = ahorroService;
     }
 
     /** Antes de listar, registra los movimientos automáticos (sueldo, alquiler...) cuya fecha ya llegó. */
@@ -56,6 +59,14 @@ public class MovimientoService {
         if (categoria.esSaldoInicial() && movimientoRepository.existsByUsuarioIdAndCategoriaId(usuarioId, categoria.getId())) {
             throw saldoInicialRepetido();
         }
+        // No se puede retirar de los ahorros más de lo que hay libre en ellos
+        if (categoria.esRetiroAhorros()) {
+            BigDecimal libres = ahorroService.libres(usuarioId);
+            if (datos.monto().compareTo(libres) > 0) {
+                throw new ConflictoException("Solo tienes " + AhorroService.soles(libres)
+                        + " libres en tus ahorros para retirar (lo que está en tus metas no se puede retirar).");
+            }
+        }
 
         Movimiento movimiento = new Movimiento(usuario, datos.descripcion().trim(), datos.monto(), datos.fecha(),
                 categoria);
@@ -71,13 +82,28 @@ public class MovimientoService {
             throw saldoInicialRepetido();
         }
 
+        boolean afectaAhorros = mueveAhorros(movimiento.getCategoria()) || mueveAhorros(categoria);
         movimiento.actualizar(datos.descripcion().trim(), datos.monto(), datos.fecha(), categoria);
+        if (afectaAhorros) {
+            movimientoRepository.flush();
+            ahorroService.validarNoNegativos(usuarioId); // si falla, la transacción deshace el cambio
+        }
         return MovimientoResponse.desde(movimiento);
     }
 
     @Transactional
     public void eliminar(Long id, Long usuarioId) {
-        movimientoRepository.delete(buscarPropio(id, usuarioId));
+        Movimiento movimiento = buscarPropio(id, usuarioId);
+        movimientoRepository.delete(movimiento);
+        // Borrar un ahorro cuyo dinero ya está en una meta dejaría los ahorros en negativo
+        if (movimiento.getCategoria().esAhorro()) {
+            movimientoRepository.flush();
+            ahorroService.validarNoNegativos(usuarioId);
+        }
+    }
+
+    private static boolean mueveAhorros(Categoria categoria) {
+        return categoria.esAhorro() || categoria.esRetiroAhorros();
     }
 
     /** El saldo inicial es el dinero con el que se empieza: se registra una sola vez (si cambia, se edita). */

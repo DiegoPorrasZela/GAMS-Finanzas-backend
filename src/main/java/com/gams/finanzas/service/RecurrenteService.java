@@ -10,6 +10,7 @@ import com.gams.finanzas.dto.RecurrenteCambioRequest;
 import com.gams.finanzas.dto.RecurrenteRequest;
 import com.gams.finanzas.dto.RecurrenteResponse;
 import com.gams.finanzas.entity.Categoria;
+import com.gams.finanzas.entity.Frecuencia;
 import com.gams.finanzas.entity.MovimientoRecurrente;
 import com.gams.finanzas.exception.DatosInvalidosException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
@@ -54,9 +55,10 @@ public class RecurrenteService {
             throw new DatosInvalidosException("El primer registro no puede ser de hace más de un año");
         }
         Categoria categoria = categoriaValida(datos.categoriaId());
+        Frecuencia frecuencia = datos.frecuencia() != null ? datos.frecuencia() : Frecuencia.MENSUAL;
         MovimientoRecurrente recurrente = recurrenteRepository.save(new MovimientoRecurrente(
                 usuarioRepository.getReferenceById(usuarioId), categoria,
-                datos.descripcion().trim(), datos.monto(), datos.fecha()));
+                datos.descripcion().trim(), datos.monto(), datos.fecha(), frecuencia));
         movimientoRepository.saveAll(recurrente.generarHasta(hoy));
         return RecurrenteResponse.desde(recurrente);
     }
@@ -91,7 +93,10 @@ public class RecurrenteService {
     private Categoria categoriaValida(Long categoriaId) {
         Categoria categoria = categoriaService.buscarEntidad(categoriaId);
         if (categoria.esSaldoInicial()) {
-            throw new DatosInvalidosException("El saldo inicial se registra una sola vez: no puede repetirse cada mes");
+            throw new DatosInvalidosException("El saldo inicial se registra una sola vez: no puede repetirse");
+        }
+        if (categoria.esRetiroAhorros()) {
+            throw new DatosInvalidosException("Los retiros de ahorros no pueden ser automáticos");
         }
         return categoria;
     }

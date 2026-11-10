@@ -8,6 +8,8 @@ import java.util.List;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -17,15 +19,15 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 /**
- * Ingreso o gasto que se repite cada mes (ej. el sueldo el día 30).
- * Cuando llega la fecha, genera el movimiento y pasa al mes siguiente.
+ * Ingreso, gasto o ahorro que se repite cada día, cada semana o cada mes (ej. el sueldo el día 30).
+ * Cuando llega la fecha, genera el movimiento y pasa a la siguiente.
  */
 @Entity
 @Table(name = "movimiento_recurrente")
 public class MovimientoRecurrente {
 
-    /** Tope de movimientos generados de una vez (por si quedaron muchos meses pendientes). */
-    private static final int MAXIMO_POR_VEZ = 24;
+    /** Tope de movimientos generados de una vez (un año de repeticiones diarias). */
+    private static final int MAXIMO_POR_VEZ = 400;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -45,6 +47,11 @@ public class MovimientoRecurrente {
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal monto;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private Frecuencia frecuencia;
+
+    /** Día del mes del primer registro (solo se usa en la frecuencia mensual). */
     @Column(nullable = false)
     private Integer dia;
 
@@ -58,10 +65,11 @@ public class MovimientoRecurrente {
         // Requerido por JPA
     }
 
-    /** El primer cargo define el día del mes en que se repetirá. */
+    /** El primer cargo define el día en que se repetirá (del mes, o de la semana si es semanal). */
     public MovimientoRecurrente(Usuario usuario, Categoria categoria, String descripcion, BigDecimal monto,
-            LocalDate primerCargo) {
+            LocalDate primerCargo, Frecuencia frecuencia) {
         this.usuario = usuario;
+        this.frecuencia = frecuencia;
         this.dia = primerCargo.getDayOfMonth();
         this.proximoCargo = primerCargo;
         this.activo = true;
@@ -79,7 +87,7 @@ public class MovimientoRecurrente {
         List<Movimiento> generados = new ArrayList<>();
         while (activo && !proximoCargo.isAfter(hoy) && generados.size() < MAXIMO_POR_VEZ) {
             generados.add(new Movimiento(usuario, descripcion, monto, proximoCargo, categoria, this));
-            proximoCargo = fechaEn(YearMonth.from(proximoCargo).plusMonths(1));
+            proximoCargo = siguiente(proximoCargo);
         }
         return generados;
     }
@@ -89,16 +97,22 @@ public class MovimientoRecurrente {
     }
 
     /**
-     * Al reanudar no se registran los meses que estuvo en pausa: sigue desde hoy. Tampoco retrocede,
-     * para no repetir un mes que ya se registró antes de pausar.
+     * Al reanudar no se registran las fechas que pasaron en pausa: sigue desde hoy. Tampoco retrocede,
+     * para no repetir una fecha que ya se registró antes de pausar.
      */
     public void reanudar(LocalDate hoy) {
         this.activo = true;
-        LocalDate fecha = fechaEn(YearMonth.from(hoy));
-        LocalDate desdeHoy = fecha.isBefore(hoy) ? fechaEn(YearMonth.from(hoy).plusMonths(1)) : fecha;
-        if (desdeHoy.isAfter(proximoCargo)) {
-            this.proximoCargo = desdeHoy;
+        while (proximoCargo.isBefore(hoy)) {
+            proximoCargo = siguiente(proximoCargo);
         }
+    }
+
+    private LocalDate siguiente(LocalDate fecha) {
+        return switch (frecuencia) {
+            case DIARIA -> fecha.plusDays(1);
+            case SEMANAL -> fecha.plusWeeks(1);
+            case MENSUAL -> fechaEn(YearMonth.from(fecha).plusMonths(1));
+        };
     }
 
     /** El día en ese mes; si el mes es más corto (ej. 31 en febrero), su último día. */
@@ -124,6 +138,10 @@ public class MovimientoRecurrente {
 
     public Integer getDia() {
         return dia;
+    }
+
+    public Frecuencia getFrecuencia() {
+        return frecuencia;
     }
 
     public LocalDate getProximoCargo() {

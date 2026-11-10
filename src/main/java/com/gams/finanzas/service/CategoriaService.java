@@ -71,16 +71,16 @@ public class CategoriaService {
         categoriaRepository.delete(categoria);
     }
 
-    /** "Saldo inicial" sostiene la regla de un solo saldo inicial por usuario: no se renombra ni se borra. */
+    /** Las categorías del sistema (saldo inicial, ahorro, retiro) sostienen reglas: no se renombran ni se borran. */
     private static void validarNoEsDelSistema(Categoria categoria) {
-        if (categoria.esSaldoInicial()) {
-            throw new ConflictoException("\"" + Categoria.SALDO_INICIAL + "\" es una categoría del sistema y no se puede modificar");
+        if (categoria.esDelSistema()) {
+            throw new ConflictoException("\"" + categoria.getNombre() + "\" es una categoría del sistema y no se puede modificar");
         }
     }
 
     private static void validarNombreNoReservado(String nombre) {
-        if (nombre.equalsIgnoreCase(Categoria.SALDO_INICIAL)) {
-            throw new ConflictoException("\"" + Categoria.SALDO_INICIAL + "\" es un nombre reservado del sistema");
+        if (Categoria.esNombreDelSistema(nombre)) {
+            throw new ConflictoException("\"" + nombre + "\" es un nombre reservado del sistema");
         }
     }
 

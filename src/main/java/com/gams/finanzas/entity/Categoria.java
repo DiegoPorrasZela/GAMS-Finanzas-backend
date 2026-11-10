@@ -14,8 +14,18 @@ import jakarta.persistence.Table;
 @Table(name = "categoria")
 public class Categoria {
 
-    /** Categoría del sistema para el dinero con el que empieza el usuario (una sola vez por usuario). */
+    // Categorías del sistema: sostienen reglas de negocio, así que no se pueden renombrar ni eliminar
+    /** Dinero con el que empieza el usuario (una sola vez por usuario). */
     public static final String SALDO_INICIAL = "Saldo inicial";
+    /** Dinero que sale del saldo hacia los ahorros (no es un gasto: es dinero guardado). */
+    public static final String AHORRO = "Ahorro";
+    /** Dinero que vuelve de los ahorros al saldo. */
+    public static final String RETIRO_AHORROS = "Retiro de ahorros";
+
+    public static boolean esNombreDelSistema(String nombre) {
+        return SALDO_INICIAL.equalsIgnoreCase(nombre) || AHORRO.equalsIgnoreCase(nombre)
+                || RETIRO_AHORROS.equalsIgnoreCase(nombre);
+    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,6 +54,18 @@ public class Categoria {
 
     public boolean esSaldoInicial() {
         return tipo == TipoMovimiento.INGRESO && SALDO_INICIAL.equals(nombre);
+    }
+
+    public boolean esAhorro() {
+        return tipo == TipoMovimiento.GASTO && AHORRO.equals(nombre);
+    }
+
+    public boolean esRetiroAhorros() {
+        return tipo == TipoMovimiento.INGRESO && RETIRO_AHORROS.equals(nombre);
+    }
+
+    public boolean esDelSistema() {
+        return esSaldoInicial() || esAhorro() || esRetiroAhorros();
     }
 
     public Long getId() {

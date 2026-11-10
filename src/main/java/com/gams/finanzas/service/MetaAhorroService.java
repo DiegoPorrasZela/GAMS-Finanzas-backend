@@ -10,26 +10,27 @@ import com.gams.finanzas.dto.AporteRequest;
 import com.gams.finanzas.dto.MetaRequest;
 import com.gams.finanzas.dto.MetaResponse;
 import com.gams.finanzas.entity.MetaAhorro;
-import com.gams.finanzas.entity.TipoMovimiento;
 import com.gams.finanzas.exception.ConflictoException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
 import com.gams.finanzas.repository.MetaAhorroRepository;
-import com.gams.finanzas.repository.MovimientoRepository;
 import com.gams.finanzas.repository.UsuarioRepository;
 
-/** CRUD de metas de ahorro y de sus aportes. Cada usuario solo accede a sus propias metas. */
+/**
+ * CRUD de metas de ahorro y de sus aportes. Cada usuario solo accede a sus propias metas.
+ * Los aportes salen de los ahorros del usuario (no directamente de su saldo).
+ */
 @Service
 public class MetaAhorroService {
 
     private final MetaAhorroRepository metaRepository;
-    private final MovimientoRepository movimientoRepository;
     private final UsuarioRepository usuarioRepository;
+    private final AhorroService ahorroService;
 
-    public MetaAhorroService(MetaAhorroRepository metaRepository, MovimientoRepository movimientoRepository,
-            UsuarioRepository usuarioRepository) {
+    public MetaAhorroService(MetaAhorroRepository metaRepository, UsuarioRepository usuarioRepository,
+            AhorroService ahorroService) {
         this.metaRepository = metaRepository;
-        this.movimientoRepository = movimientoRepository;
         this.usuarioRepository = usuarioRepository;
+        this.ahorroService = ahorroService;
     }
 
     @Transactional(readOnly = true)
@@ -53,30 +54,29 @@ public class MetaAhorroService {
         return MetaResponse.desde(meta);
     }
 
+    /** Al eliminar la meta, lo que se había aportado vuelve a estar libre en los ahorros. */
     @Transactional
     public void eliminar(Long id, Long usuarioId) {
         metaRepository.delete(buscarPropia(id, usuarioId));
     }
 
-    /**
-     * Separa dinero para una meta. No se puede separar más de lo disponible:
-     * disponible = saldo (ingresos − gastos) − lo que ya está separado en otras metas.
-     */
+    /** Pasa dinero de los ahorros a una meta. No se puede aportar más de lo que hay libre en los ahorros. */
     @Transactional
     public MetaResponse aportar(Long metaId, AporteRequest datos, Long usuarioId) {
         MetaAhorro meta = buscarPropia(metaId, usuarioId);
-        BigDecimal disponible = disponible(usuarioId);
-        if (datos.monto().compareTo(disponible) > 0) {
-            throw new ConflictoException(disponible.signum() > 0
-                    ? "Solo tienes S/ %.2f disponibles para separar (tu saldo menos lo que ya está en tus metas)"
-                            .formatted(disponible)
-                    : "No tienes saldo disponible para separar: registra primero tus ingresos");
+        BigDecimal libres = ahorroService.libres(usuarioId);
+        if (datos.monto().compareTo(libres) > 0) {
+            throw new ConflictoException(libres.signum() > 0
+                    ? "En tus ahorros tienes " + AhorroService.soles(libres)
+                            + " libres. Separa más dinero a tus ahorros para aportar esa cantidad."
+                    : "Tus ahorros están vacíos: primero separa dinero de tu saldo a tus ahorros.");
         }
         meta.aportar(datos.monto(), datos.fecha());
         metaRepository.flush(); // guarda el aporte ahora para que la respuesta ya tenga su id
         return MetaResponse.desde(meta);
     }
 
+    /** El aporte quitado vuelve a estar libre en los ahorros. */
     @Transactional
     public MetaResponse quitarAporte(Long metaId, Long aporteId, Long usuarioId) {
         MetaAhorro meta = buscarPropia(metaId, usuarioId);
@@ -84,12 +84,6 @@ public class MetaAhorroService {
             throw new RecursoNoEncontradoException("El aporte " + aporteId + " no existe en esta meta");
         }
         return MetaResponse.desde(meta);
-    }
-
-    private BigDecimal disponible(Long usuarioId) {
-        BigDecimal saldo = movimientoRepository.sumarPorTipo(usuarioId, TipoMovimiento.INGRESO)
-                .subtract(movimientoRepository.sumarPorTipo(usuarioId, TipoMovimiento.GASTO));
-        return saldo.subtract(metaRepository.totalAportado(usuarioId));
     }
 
     private MetaAhorro buscarPropia(Long id, Long usuarioId) {

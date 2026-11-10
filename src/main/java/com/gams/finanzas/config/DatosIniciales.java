@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.gams.finanzas.entity.Categoria;
+import com.gams.finanzas.entity.Frecuencia;
 import com.gams.finanzas.entity.MetaAhorro;
 import com.gams.finanzas.entity.Movimiento;
 import com.gams.finanzas.entity.MovimientoRecurrente;
@@ -104,9 +105,9 @@ public class DatosIniciales implements CommandLineRunner {
         YearMonth siguiente = YearMonth.now().plusMonths(1);
         recurrenteRepository.saveAll(List.of(
                 new MovimientoRecurrente(demo, categoria("Sueldo", TipoMovimiento.INGRESO), "Pago de prácticas",
-                        new BigDecimal("1500"), siguiente.atDay(7)),
+                        new BigDecimal("1500"), siguiente.atDay(7), Frecuencia.MENSUAL),
                 new MovimientoRecurrente(demo, categoria("Servicios", TipoMovimiento.GASTO), "Plan de celular",
-                        new BigDecimal("45"), siguiente.atDay(2))));
+                        new BigDecimal("45"), siguiente.atDay(2), Frecuencia.MENSUAL)));
     }
 
     private Categoria categoria(String nombre, TipoMovimiento tipo) {
@@ -119,6 +120,10 @@ public class DatosIniciales implements CommandLineRunner {
         YearMonth actual = YearMonth.now();
         presupuestoRepository.save(new PresupuestoMensual(demo, actual.getYear(), actual.getMonthValue(),
                 new BigDecimal("600"), new BigDecimal("300")));
+
+        // Los aportes salen de los ahorros: primero se separa ese dinero del saldo
+        movimientoRepository.save(new Movimiento(demo, "Separé para mis metas", new BigDecimal("700"),
+                LocalDate.now().minusDays(41), categoria(Categoria.AHORRO, TipoMovimiento.GASTO)));
 
         MetaAhorro laptop = new MetaAhorro(demo, "Laptop para la universidad", new BigDecimal("2500"),
                 actual.plusMonths(6).atEndOfMonth());
