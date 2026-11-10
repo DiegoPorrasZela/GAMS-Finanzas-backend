@@ -60,16 +60,35 @@ config/       Seguridad (JWT, roles, CORS) y datos iniciales
 
 ## Reglas de negocio
 
+### Flujo del dinero
+
+```mermaid
+flowchart LR
+    I["Ingresos<br/>(sueldo, saldo inicial…)"] --> S["Saldo<br/>disponible para gastar"]
+    S -- "Gastos" --> G["Consumo"]
+    S -- "🐷 Ahorro<br/>(manual o automático)" --> A["Ahorros"]
+    A -- "Retiro de ahorros" --> S
+    A -- "Aportes" --> M["Metas<br/>(Laptop, Viaje…)"]
+```
+
+- El **ahorro** sale del saldo y se ve en Movimientos, pero **no cuenta como gasto**: no afecta el presupuesto
+  ni el gráfico por categoría; cuenta como "ahorro del mes".
+- El **saldo inicial** y los **retiros de ahorros** entran al saldo, pero no son ingresos ganados en el mes.
+
 | Regla | Dónde se valida | Por qué |
 |---|---|---|
 | Un usuario solo ve y modifica sus propios datos | Servicios (el id sale del token) | Privacidad: lo ajeno responde 404 |
 | Los movimientos y aportes no pueden tener fecha futura (sí pasada) | DTO (`@PastOrPresent`) y front | Se puede registrar un gasto olvidado, pero no inventar uno que no ocurrió |
 | La fecha límite de una meta no puede estar en el pasado | DTO (`@FutureOrPresent`) y front | Una meta es un objetivo a futuro |
-| No se puede aportar a una meta más de lo disponible (saldo − lo ya separado en metas) | `MetaAhorroService` y front | No se puede separar dinero que no se tiene |
+| Los aportes a metas salen de los ahorros libres (separado − retirado − aportado): no se puede aportar más | `MetaAhorroService` y front | No se puede guardar para una meta dinero que no se separó |
+| No se puede retirar de los ahorros más de lo libre (lo que está en metas no se retira) | `MovimientoService` y front | Primero se quita el aporte de la meta |
+| Los ahorros nunca quedan en negativo: borrar o rebajar un ahorro cuyo dinero ya está en una meta se rechaza | `AhorroService` (se valida después del cambio y la transacción se deshace) | El dinero de las metas tiene que haber salido de algún ahorro |
+| Separar a ahorros más de lo que hay en el saldo se avisa, no se bloquea | Front | Igual que un gasto: la app registra la realidad |
+| Los retiros de ahorros no pueden ser automáticos | `RecurrenteService` | Retirar es una decisión puntual (una emergencia) |
 | Un gasto que deja el saldo en negativo **se avisa, no se bloquea** | Front (confirmación) e Inicio (alerta) | La app registra la realidad: si el gasto ocurrió (ej. con tarjeta), bloquearlo haría perder el control |
 | El saldo inicial (dinero con el que se empieza) se registra **una sola vez** por usuario y no puede ser automático; si cambia, se edita | `MovimientoService`, `RecurrenteService` y front | Es un punto de partida, no un ingreso que se repite |
-| "Saldo inicial" es una categoría del sistema: no se puede renombrar, eliminar ni duplicar | `CategoriaService` | Si el admin la cambiara, la regla anterior dejaría de funcionar |
-| Los automáticos se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar el mismo mes dos veces |
+| "Saldo inicial", "Ahorro" y "Retiro de ahorros" son categorías del sistema: no se pueden renombrar, eliminar ni duplicar | `CategoriaService` | Si el admin las cambiara, las reglas de saldo inicial y ahorros dejarían de funcionar |
+| Los automáticos (diarios, semanales o mensuales) se registran al llegar su fecha, sin duplicarse | `RecurrenteService` (bloqueo `FOR UPDATE`) | Dos peticiones a la vez no pueden registrar la misma fecha dos veces |
 | Al reanudar un automático no se registran los meses en pausa | `MovimientoRecurrente.reanudar()` | Pausar significa que esos meses no hubo ese ingreso o gasto |
 | No se puede borrar ni cambiar de tipo una categoría con movimientos | `CategoriaService` | Cambiaría el historial de los usuarios |
 | El presupuesto avisa si límite + ahorro supera los ingresos del mes | Front | Ayuda a planificar algo que sí se puede cumplir |
@@ -136,6 +155,7 @@ erDiagram
         bigint categoria_id FK
         varchar descripcion
         numeric monto
+        varchar frecuencia "DIARIA, SEMANAL o MENSUAL"
         int dia "1 a 31"
         date proximo_cargo
         boolean activo
@@ -169,7 +189,7 @@ erDiagram
 | `usuario` | id, nombre, email (único), password (BCrypt), rol_id → rol |
 | `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`); nombre + tipo es único |
 | `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha, recurrente_id → movimiento_recurrente (opcional) |
-| `movimiento_recurrente` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto, dia, proximo_cargo, activo |
+| `movimiento_recurrente` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto, frecuencia, dia, proximo_cargo, activo |
 | `presupuesto_mensual` | id, usuario_id → usuario, anio, mes, limite_gasto, ahorro_objetivo; un plan por usuario y mes |
 | `meta_ahorro` | id, usuario_id → usuario, nombre, monto_objetivo, fecha_limite (opcional) |
 | `aporte` | id, meta_id → meta_ahorro, monto (> 0), fecha |
@@ -181,8 +201,9 @@ Cómo cumple cada forma normal:
 - **3FN:** ningún atributo depende de otro que no sea la clave. `movimiento` no guarda el tipo (lo toma de su
   categoría) y `usuario` no guarda el nombre del rol (solo `rol_id`). Guardarlos sería una dependencia
   transitiva y podría dejar datos contradictorios.
-- **Datos calculados, no guardados:** lo gastado en un mes se obtiene de `movimiento` y lo ahorrado en una
-  meta es la suma de sus `aporte`. Guardar esos totales sería redundante y podrían quedar desactualizados.
+- **Datos calculados, no guardados:** lo gastado en un mes se obtiene de `movimiento`, lo ahorrado en una
+  meta es la suma de sus `aporte` y lo libre en ahorros es (separado − retirado − aportado). Guardar esos
+  totales sería redundante y podrían quedar desactualizados.
 
 ## Endpoints
 
@@ -198,7 +219,7 @@ Cómo cumple cada forma normal:
 | PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
 | DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
 | GET | `/api/recurrentes` | Con sesión | Mis movimientos automáticos (se repiten cada mes) |
-| POST | `/api/recurrentes` | Con sesión | Crear un automático; registra de una vez los meses que ya llegaron |
+| POST | `/api/recurrentes` | Con sesión | Crear un automático (diario, semanal o mensual); registra de una vez las fechas que ya llegaron |
 | PUT | `/api/recurrentes/{id}` | Con sesión | Editar, pausar o reanudar un automático |
 | DELETE | `/api/recurrentes/{id}` | Con sesión | Eliminar un automático (los movimientos ya registrados se conservan) |
 | GET | `/api/presupuestos` | Con sesión | Mis presupuestos mensuales |
