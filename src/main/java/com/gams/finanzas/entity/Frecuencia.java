@@ -4,5 +4,7 @@ package com.gams.finanzas.entity;
 public enum Frecuencia {
     DIARIA,
     SEMANAL,
+    /** El 15 y el último día de cada mes (pago quincenal). */
+    QUINCENAL,
     MENSUAL
 }

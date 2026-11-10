@@ -19,12 +19,19 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 /**
- * Ingreso, gasto o ahorro que se repite cada día, cada semana o cada mes (ej. el sueldo el día 30).
+ * Ingreso, gasto o ahorro que se repite cada día, semana, quincena o mes (ej. el sueldo a fin de mes).
  * Cuando llega la fecha, genera el movimiento y pasa a la siguiente.
+ *
+ * Meses de distinto largo: si el día elegido no existe en un mes (29, 30 o 31), se usa el último día de
+ * ese mes, y al mes siguiente se vuelve al día elegido. El día 31 significa "el último día del mes".
  */
 @Entity
 @Table(name = "movimiento_recurrente")
 public class MovimientoRecurrente {
+
+    /** Con este día se registra siempre el último día del mes (28, 29, 30 o 31). */
+    public static final int ULTIMO_DIA = 31;
+    private static final int QUINCENA = 15;
 
     /** Tope de movimientos generados de una vez (un año de repeticiones diarias). */
     private static final int MAXIMO_POR_VEZ = 400;
@@ -51,7 +58,7 @@ public class MovimientoRecurrente {
     @Column(nullable = false, length = 10)
     private Frecuencia frecuencia;
 
-    /** Día del mes del primer registro (solo se usa en la frecuencia mensual). */
+    /** Día del mes en que se registra (frecuencia mensual; 31 = último día del mes). */
     @Column(nullable = false)
     private Integer dia;
 
@@ -65,13 +72,18 @@ public class MovimientoRecurrente {
         // Requerido por JPA
     }
 
-    /** El primer cargo define el día en que se repetirá (del mes, o de la semana si es semanal). */
+    /**
+     * @param desde desde qué día empieza: el primer registro es la primera fecha del calendario a partir de
+     *              ese día (en la semanal, además, define el día de la semana)
+     * @param dia   día del mes para la frecuencia mensual (1 a 31; 31 = último día). Si es null, se usa el
+     *              día de "desde"
+     */
     public MovimientoRecurrente(Usuario usuario, Categoria categoria, String descripcion, BigDecimal monto,
-            LocalDate primerCargo, Frecuencia frecuencia) {
+            LocalDate desde, Frecuencia frecuencia, Integer dia) {
         this.usuario = usuario;
         this.frecuencia = frecuencia;
-        this.dia = primerCargo.getDayOfMonth();
-        this.proximoCargo = primerCargo;
+        this.dia = frecuencia == Frecuencia.QUINCENAL ? QUINCENA : dia != null ? dia : desde.getDayOfMonth();
+        this.proximoCargo = primeraDesde(desde);
         this.activo = true;
         actualizar(descripcion, monto, categoria);
     }
@@ -82,7 +94,7 @@ public class MovimientoRecurrente {
         this.categoria = categoria;
     }
 
-    /** Crea los movimientos de las fechas que ya llegaron (hasta hoy) y avanza al mes siguiente. */
+    /** Crea los movimientos de las fechas que ya llegaron (hasta hoy) y avanza a la siguiente. */
     public List<Movimiento> generarHasta(LocalDate hoy) {
         List<Movimiento> generados = new ArrayList<>();
         while (activo && !proximoCargo.isAfter(hoy) && generados.size() < MAXIMO_POR_VEZ) {
@@ -107,11 +119,22 @@ public class MovimientoRecurrente {
         }
     }
 
+    /** La fecha del calendario que sigue a una ya registrada. */
     private LocalDate siguiente(LocalDate fecha) {
         return switch (frecuencia) {
             case DIARIA -> fecha.plusDays(1);
             case SEMANAL -> fecha.plusWeeks(1);
-            case MENSUAL -> fechaEn(YearMonth.from(fecha).plusMonths(1));
+            case QUINCENAL, MENSUAL -> primeraDesde(fecha.plusDays(1));
+        };
+    }
+
+    /** Primera fecha del calendario que sea igual o posterior a "desde". */
+    private LocalDate primeraDesde(LocalDate desde) {
+        YearMonth mes = YearMonth.from(desde);
+        return switch (frecuencia) {
+            case DIARIA, SEMANAL -> desde;
+            case QUINCENAL -> desde.getDayOfMonth() <= QUINCENA ? mes.atDay(QUINCENA) : mes.atEndOfMonth();
+            case MENSUAL -> fechaEn(mes).isBefore(desde) ? fechaEn(mes.plusMonths(1)) : fechaEn(mes);
         };
     }
 

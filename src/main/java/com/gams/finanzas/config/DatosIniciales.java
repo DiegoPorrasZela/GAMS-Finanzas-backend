@@ -105,9 +105,9 @@ public class DatosIniciales implements CommandLineRunner {
         YearMonth siguiente = YearMonth.now().plusMonths(1);
         recurrenteRepository.saveAll(List.of(
                 new MovimientoRecurrente(demo, categoria("Sueldo", TipoMovimiento.INGRESO), "Pago de prácticas",
-                        new BigDecimal("1500"), siguiente.atDay(7), Frecuencia.MENSUAL),
+                        new BigDecimal("1500"), siguiente.atDay(1), Frecuencia.MENSUAL, 7),
                 new MovimientoRecurrente(demo, categoria("Servicios", TipoMovimiento.GASTO), "Plan de celular",
-                        new BigDecimal("45"), siguiente.atDay(2), Frecuencia.MENSUAL)));
+                        new BigDecimal("45"), siguiente.atDay(1), Frecuencia.MENSUAL, 2)));
     }
 
     private Categoria categoria(String nombre, TipoMovimiento tipo) {

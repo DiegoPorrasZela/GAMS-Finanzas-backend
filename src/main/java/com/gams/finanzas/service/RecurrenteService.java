@@ -47,7 +47,7 @@ public class RecurrenteService {
                 .toList();
     }
 
-    /** Crea la repetición y registra de una vez el primer movimiento si su fecha ya llegó (ej. hoy). */
+    /** Crea la repetición y registra de una vez las fechas que ya llegaron (ej. si la primera es hoy). */
     @Transactional
     public RecurrenteResponse crear(RecurrenteRequest datos, Long usuarioId) {
         LocalDate hoy = LocalDate.now();
@@ -58,7 +58,7 @@ public class RecurrenteService {
         Frecuencia frecuencia = datos.frecuencia() != null ? datos.frecuencia() : Frecuencia.MENSUAL;
         MovimientoRecurrente recurrente = recurrenteRepository.save(new MovimientoRecurrente(
                 usuarioRepository.getReferenceById(usuarioId), categoria,
-                datos.descripcion().trim(), datos.monto(), datos.fecha(), frecuencia));
+                datos.descripcion().trim(), datos.monto(), datos.fecha(), frecuencia, datos.dia()));
         movimientoRepository.saveAll(recurrente.generarHasta(hoy));
         return RecurrenteResponse.desde(recurrente);
     }
