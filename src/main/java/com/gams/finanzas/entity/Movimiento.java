@@ -3,6 +3,9 @@ package com.gams.finanzas.entity;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -48,6 +51,15 @@ public class Movimiento {
     @JoinColumn(name = "recurrente_id")
     private MovimientoRecurrente recurrente;
 
+    /** Moneda en que se pagó (USD o EUR) si no fue en soles; el monto en soles va en "monto". */
+    @Column(name = "moneda_original", length = 3)
+    @JdbcTypeCode(SqlTypes.CHAR) // código ISO de 3 letras: CHAR(3) en la base de datos
+    private String monedaOriginal;
+
+    /** Monto en la moneda original (ej. 10.00 si fueron US$ 10). */
+    @Column(name = "monto_original", precision = 12, scale = 2)
+    private BigDecimal montoOriginal;
+
     protected Movimiento() {
         // Requerido por JPA
     }
@@ -72,6 +84,20 @@ public class Movimiento {
         this.monto = monto;
         this.fecha = fecha;
         this.categoria = categoria;
+    }
+
+    /** Registra en qué moneda se pagó; con null, el movimiento queda en soles. */
+    public void cambiarMonedaOriginal(String moneda, BigDecimal monto) {
+        this.monedaOriginal = moneda;
+        this.montoOriginal = moneda == null ? null : monto;
+    }
+
+    public String getMonedaOriginal() {
+        return monedaOriginal;
+    }
+
+    public BigDecimal getMontoOriginal() {
+        return montoOriginal;
     }
 
     public Long getId() {

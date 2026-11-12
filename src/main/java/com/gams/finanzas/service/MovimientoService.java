@@ -12,6 +12,7 @@ import com.gams.finanzas.entity.Categoria;
 import com.gams.finanzas.entity.Movimiento;
 import com.gams.finanzas.entity.Usuario;
 import com.gams.finanzas.exception.ConflictoException;
+import com.gams.finanzas.exception.DatosInvalidosException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
 import com.gams.finanzas.repository.MovimientoRepository;
 import com.gams.finanzas.repository.UsuarioRepository;
@@ -68,8 +69,11 @@ public class MovimientoService {
             }
         }
 
+        validarMonedaOriginal(datos, categoria);
+
         Movimiento movimiento = new Movimiento(usuario, datos.descripcion().trim(), datos.monto(), datos.fecha(),
                 categoria);
+        movimiento.cambiarMonedaOriginal(datos.monedaOriginal(), datos.montoOriginal());
         return MovimientoResponse.desde(movimientoRepository.save(movimiento));
     }
 
@@ -82,8 +86,11 @@ public class MovimientoService {
             throw saldoInicialRepetido();
         }
 
+        validarMonedaOriginal(datos, categoria);
+
         boolean afectaAhorros = mueveAhorros(movimiento.getCategoria()) || mueveAhorros(categoria);
         movimiento.actualizar(datos.descripcion().trim(), datos.monto(), datos.fecha(), categoria);
+        movimiento.cambiarMonedaOriginal(datos.monedaOriginal(), datos.montoOriginal());
         if (afectaAhorros) {
             movimientoRepository.flush();
             ahorroService.validarNoNegativos(usuarioId); // si falla, la transacción deshace el cambio
@@ -99,6 +106,19 @@ public class MovimientoService {
         if (movimiento.getCategoria().esAhorro()) {
             movimientoRepository.flush();
             ahorroService.validarNoNegativos(usuarioId);
+        }
+    }
+
+    /**
+     * Un pago en dólares o euros trae la moneda y el monto original juntos.
+     * El saldo inicial y los ahorros se manejan siempre en soles.
+     */
+    private static void validarMonedaOriginal(MovimientoRequest datos, Categoria categoria) {
+        if ((datos.monedaOriginal() == null) != (datos.montoOriginal() == null)) {
+            throw new DatosInvalidosException("Indica la moneda y el monto original juntos (o ninguno si fue en soles)");
+        }
+        if (datos.monedaOriginal() != null && categoria.esDelSistema()) {
+            throw new DatosInvalidosException("\"" + categoria.getNombre() + "\" se registra siempre en soles");
         }
     }
 

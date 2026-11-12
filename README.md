@@ -66,7 +66,7 @@ config/       Seguridad (JWT, roles, CORS) y datos iniciales
 flowchart LR
     I["Ingresos<br/>(sueldo, saldo inicial…)"] --> S["Saldo<br/>disponible para gastar"]
     S -- "Gastos" --> G["Consumo"]
-    S -- "🐷 Ahorro<br/>(manual o automático)" --> A["Ahorros"]
+    S -- "Ahorro<br/>(manual o automático)" --> A["Ahorros"]
     A -- "Retiro de ahorros" --> S
     A -- "Aportes" --> M["Metas<br/>(Laptop, Viaje…)"]
 ```
@@ -94,6 +94,9 @@ flowchart LR
 | Al reanudar un automático no se registran los meses en pausa | `MovimientoRecurrente.reanudar()` | Pausar significa que esos meses no hubo ese ingreso o gasto |
 | No se puede borrar ni cambiar de tipo una categoría con movimientos | `CategoriaService` | Cambiaría el historial de los usuarios |
 | El presupuesto avisa si límite + ahorro supera los ingresos del mes | Front | Ayuda a planificar algo que sí se puede cumplir |
+| Un pago en dólares o euros guarda el monto en soles **y** el monto y la moneda originales (los dos o ninguno); solo USD y EUR | `MovimientoRequest`, `MovimientoService` y restricciones `CHECK` en la base | Se ve "US$ 10.00" tal como se pagó, pero todos los totales siguen en soles |
+| El saldo inicial y los ahorros se registran siempre en soles | `MovimientoService` | Son movimientos internos del dinero del usuario |
+| Cada categoría tiene un ícono y un color de una lista fija (si no se indican: etiqueta gris; al editar sin indicarlos se conservan) | `CategoriaRequest` (`@Pattern` con `Categoria.ICONOS` y `Categoria.COLORES`) | El frontend sabe dibujar solo esos íconos y colores |
 | "Hoy" se calcula con la hora de Perú (`America/Lima`) | `GamsFinanzasApplication` | El servidor en la nube usa UTC |
 
 ## Patrones de diseño
@@ -141,6 +144,8 @@ erDiagram
         bigint id PK
         varchar nombre "único junto con tipo"
         varchar tipo "INGRESO o GASTO"
+        varchar icono "ej. comida"
+        varchar color "ej. naranja"
     }
     MOVIMIENTO {
         bigint id PK
@@ -150,6 +155,8 @@ erDiagram
         numeric monto "mayor a 0"
         date fecha "no futura"
         bigint recurrente_id FK "opcional"
+        char moneda_original "USD o EUR (opcional)"
+        numeric monto_original "opcional"
     }
     MOVIMIENTO_RECURRENTE {
         bigint id PK
@@ -189,8 +196,8 @@ erDiagram
 |---|---|
 | `rol` | id, nombre |
 | `usuario` | id, nombre, email (único), password (BCrypt), rol_id → rol |
-| `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`); nombre + tipo es único |
-| `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto (> 0), fecha, recurrente_id → movimiento_recurrente (opcional) |
+| `categoria` | id, nombre, tipo (`INGRESO`/`GASTO`), icono, color; nombre + tipo es único |
+| `movimiento` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto en soles (> 0), fecha, recurrente_id → movimiento_recurrente (opcional), moneda_original y monto_original (opcionales, los dos o ninguno) |
 | `movimiento_recurrente` | id, usuario_id → usuario, categoria_id → categoria, descripcion, monto, frecuencia, dia, proximo_cargo, activo |
 | `presupuesto_mensual` | id, usuario_id → usuario, anio, mes, limite_gasto, ahorro_objetivo; un plan por usuario y mes |
 | `meta_ahorro` | id, usuario_id → usuario, nombre, monto_objetivo, fecha_limite (opcional) |
@@ -205,7 +212,10 @@ Cómo cumple cada forma normal:
   transitiva y podría dejar datos contradictorios.
 - **Datos calculados, no guardados:** lo gastado en un mes se obtiene de `movimiento`, lo ahorrado en una
   meta es la suma de sus `aporte` y lo libre en ahorros es (separado − retirado − aportado). Guardar esos
-  totales sería redundante y podrían quedar desactualizados.
+  totales sería redundante y podrían quedar desactualizados. Por lo mismo, en un pago en dólares no se guarda la
+  tasa de cambio: es `monto / monto_original`.
+- **El ícono y el color** dependen solo de la categoría (no de cada movimiento): por eso viven en `categoria`
+  y el movimiento los obtiene por `categoria_id`.
 
 ## Endpoints
 
@@ -244,6 +254,13 @@ Ejemplo de cuerpo para crear un movimiento:
 
 ```json
 { "descripcion": "Menú del almuerzo", "monto": 15.50, "fecha": "2026-11-08", "categoriaId": 6 }
+```
+
+Un gasto pagado en dólares (el cliente lo convierte con el tipo de cambio de ese día y envía ambos montos):
+
+```json
+{ "descripcion": "Suscripción de música", "monto": 34.50, "fecha": "2026-11-09", "categoriaId": 11,
+  "monedaOriginal": "USD", "montoOriginal": 10.00 }
 ```
 
 Los errores se devuelven en formato [ProblemDetail](https://www.rfc-editor.org/rfc/rfc9457) con el código HTTP

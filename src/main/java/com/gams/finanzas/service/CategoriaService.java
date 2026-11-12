@@ -38,7 +38,7 @@ public class CategoriaService {
         if (categoriaRepository.existsByNombreIgnoreCaseAndTipo(nombre, datos.tipo())) {
             throw new ConflictoException("Ya existe la categoría \"" + nombre + "\" de tipo " + datos.tipo());
         }
-        Categoria categoria = categoriaRepository.save(new Categoria(nombre, datos.tipo()));
+        Categoria categoria = categoriaRepository.save(new Categoria(nombre, datos.tipo(), datos.icono(), datos.color()));
         return CategoriaResponse.desde(categoria);
     }
 
@@ -58,6 +58,7 @@ public class CategoriaService {
         }
 
         categoria.actualizar(nombre, datos.tipo());
+        categoria.cambiarApariencia(datos.icono(), datos.color());
         return CategoriaResponse.desde(categoria);
     }
 

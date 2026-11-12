@@ -7,10 +7,15 @@ import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-/** Datos que envía el cliente para crear o editar un movimiento. El tipo sale de la categoría. */
+/**
+ * Datos que envía el cliente para crear o editar un movimiento. El tipo sale de la categoría.
+ * "monto" siempre va en soles. Si se pagó en dólares o euros, se envían además la moneda y el
+ * monto original (el cliente hace la conversión con el tipo de cambio del día y la muestra al usuario).
+ */
 public record MovimientoRequest(
 
         @NotBlank(message = "La descripción es obligatoria")
@@ -28,5 +33,12 @@ public record MovimientoRequest(
         LocalDate fecha,
 
         @NotNull(message = "La categoría es obligatoria")
-        Long categoriaId) {
+        Long categoriaId,
+
+        @Pattern(regexp = "USD|EUR", message = "La moneda debe ser USD o EUR")
+        String monedaOriginal,
+
+        @Positive(message = "El monto original debe ser mayor a 0")
+        @Digits(integer = 10, fraction = 2, message = "El monto original admite como máximo 2 decimales")
+        BigDecimal montoOriginal) {
 }
