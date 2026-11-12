@@ -46,7 +46,7 @@ public class Movimiento {
     @Column(nullable = false)
     private LocalDate fecha;
 
-    /** Repetición mensual que lo generó; null si lo registró el usuario a mano. */
+    /** Movimiento automático que lo generó; null si lo registró el usuario a mano. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recurrente_id")
     private MovimientoRecurrente recurrente;
@@ -102,10 +102,6 @@ public class Movimiento {
 
     public Long getId() {
         return id;
-    }
-
-    public Usuario getUsuario() {
-        return usuario;
     }
 
     public Categoria getCategoria() {

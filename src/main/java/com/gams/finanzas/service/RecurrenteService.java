@@ -19,7 +19,7 @@ import com.gams.finanzas.repository.MovimientoRepository;
 import com.gams.finanzas.repository.UsuarioRepository;
 
 /**
- * Ingresos y gastos automáticos (se repiten cada mes).
+ * Ingresos, gastos y ahorros automáticos (diarios, semanales, quincenales o mensuales).
  * No hay una tarea programada: el servidor gratuito se "duerme" y no la ejecutaría. En su lugar, cada vez
  * que el usuario consulta sus movimientos se registran los que ya llegaron a su fecha.
  */

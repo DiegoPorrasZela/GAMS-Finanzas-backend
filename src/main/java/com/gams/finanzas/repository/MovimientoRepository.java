@@ -34,11 +34,4 @@ public interface MovimientoRepository extends JpaRepository<Movimiento, Long> {
             """)
     BigDecimal sumarPorCategoria(@Param("usuarioId") Long usuarioId, @Param("nombre") String nombre,
             @Param("tipo") TipoMovimiento tipo);
-
-    /** Total de ingresos o de gastos de un usuario (para calcular su saldo). */
-    @Query("""
-            SELECT COALESCE(SUM(m.monto), 0) FROM Movimiento m
-            WHERE m.usuario.id = :usuarioId AND m.categoria.tipo = :tipo
-            """)
-    BigDecimal sumarPorTipo(@Param("usuarioId") Long usuarioId, @Param("tipo") TipoMovimiento tipo);
 }

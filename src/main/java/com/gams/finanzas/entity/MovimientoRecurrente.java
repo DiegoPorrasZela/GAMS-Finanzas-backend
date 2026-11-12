@@ -29,8 +29,6 @@ import jakarta.persistence.Table;
 @Table(name = "movimiento_recurrente")
 public class MovimientoRecurrente {
 
-    /** Con este día se registra siempre el último día del mes (28, 29, 30 o 31). */
-    public static final int ULTIMO_DIA = 31;
     private static final int QUINCENA = 15;
 
     /** Tope de movimientos generados de una vez (un año de repeticiones diarias). */

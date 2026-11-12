@@ -23,7 +23,7 @@ import com.gams.finanzas.service.RecurrenteService;
 
 import jakarta.validation.Valid;
 
-/** Ingresos y gastos automáticos (se repiten cada mes). */
+/** Ingresos, gastos y ahorros automáticos (diarios, semanales, quincenales o mensuales). */
 @RestController
 @RequestMapping("/api/recurrentes")
 public class RecurrenteController {
