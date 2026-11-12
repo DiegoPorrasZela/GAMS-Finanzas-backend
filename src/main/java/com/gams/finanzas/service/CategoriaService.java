@@ -11,6 +11,7 @@ import com.gams.finanzas.entity.Categoria;
 import com.gams.finanzas.exception.ConflictoException;
 import com.gams.finanzas.exception.RecursoNoEncontradoException;
 import com.gams.finanzas.repository.CategoriaRepository;
+import com.gams.finanzas.repository.MovimientoRecurrenteRepository;
 import com.gams.finanzas.repository.MovimientoRepository;
 
 @Service
@@ -18,10 +19,13 @@ public class CategoriaService {
 
     private final CategoriaRepository categoriaRepository;
     private final MovimientoRepository movimientoRepository;
+    private final MovimientoRecurrenteRepository recurrenteRepository;
 
-    public CategoriaService(CategoriaRepository categoriaRepository, MovimientoRepository movimientoRepository) {
+    public CategoriaService(CategoriaRepository categoriaRepository, MovimientoRepository movimientoRepository,
+            MovimientoRecurrenteRepository recurrenteRepository) {
         this.categoriaRepository = categoriaRepository;
         this.movimientoRepository = movimientoRepository;
+        this.recurrenteRepository = recurrenteRepository;
     }
 
     @Transactional(readOnly = true)
@@ -52,9 +56,10 @@ public class CategoriaService {
         if (categoriaRepository.existsByNombreIgnoreCaseAndTipoAndIdNot(nombre, datos.tipo(), id)) {
             throw new ConflictoException("Ya existe la categoría \"" + nombre + "\" de tipo " + datos.tipo());
         }
-        // Cambiar el tipo convertiría en ingresos los gastos ya registrados (o al revés)
-        if (categoria.getTipo() != datos.tipo() && movimientoRepository.existsByCategoriaId(id)) {
-            throw new ConflictoException("No se puede cambiar el tipo de una categoría que ya tiene movimientos");
+        // Cambiar el tipo convertiría en ingresos los gastos ya registrados o programados (o al revés)
+        if (categoria.getTipo() != datos.tipo() && estaEnUso(id)) {
+            throw new ConflictoException(
+                    "No se puede cambiar el tipo de una categoría que ya tiene movimientos o automáticos");
         }
 
         categoria.actualizar(nombre, datos.tipo());
@@ -66,10 +71,16 @@ public class CategoriaService {
     public void eliminar(Long id) {
         Categoria categoria = buscarEntidad(id);
         validarNoEsDelSistema(categoria);
-        if (movimientoRepository.existsByCategoriaId(id)) {
-            throw new ConflictoException("No se puede eliminar una categoría que ya tiene movimientos");
+        if (estaEnUso(id)) {
+            throw new ConflictoException("No se puede eliminar una categoría que ya tiene movimientos o automáticos");
         }
         categoriaRepository.delete(categoria);
+    }
+
+    /** En uso = algún usuario la tiene en un movimiento o en un automático (aunque aún no haya registrado nada). */
+    private boolean estaEnUso(Long categoriaId) {
+        return movimientoRepository.existsByCategoriaId(categoriaId)
+                || recurrenteRepository.existsByCategoriaId(categoriaId);
     }
 
     /** Las categorías del sistema (saldo inicial, ahorro, retiro) sostienen reglas: no se renombran ni se borran. */

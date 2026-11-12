@@ -50,6 +50,12 @@ public class MetaAhorroService {
     @Transactional
     public MetaResponse actualizar(Long id, MetaRequest datos, Long usuarioId) {
         MetaAhorro meta = buscarPropia(id, usuarioId);
+        // El objetivo no puede quedar por debajo de lo que ya se ahorró (la meta pasaría del 100 %)
+        BigDecimal ahorrado = meta.getAhorrado();
+        if (datos.montoObjetivo().compareTo(ahorrado) < 0) {
+            throw new ConflictoException("Ya ahorraste " + AhorroService.soles(ahorrado)
+                    + " en esta meta: el objetivo no puede ser menor. Quita primero algún aporte.");
+        }
         meta.actualizar(datos.nombre().trim(), datos.montoObjetivo(), datos.fechaLimite());
         return MetaResponse.desde(meta);
     }
@@ -64,6 +70,15 @@ public class MetaAhorroService {
     @Transactional
     public MetaResponse aportar(Long metaId, AporteRequest datos, Long usuarioId) {
         MetaAhorro meta = buscarPropia(metaId, usuarioId);
+        // Una meta cumplida no recibe más: el aporte no puede pasar de lo que falta
+        BigDecimal faltante = meta.getMontoObjetivo().subtract(meta.getAhorrado());
+        if (faltante.signum() <= 0) {
+            throw new ConflictoException("Esta meta ya está cumplida: no necesita más aportes.");
+        }
+        if (datos.monto().compareTo(faltante) > 0) {
+            throw new ConflictoException("Solo te faltan " + AhorroService.soles(faltante)
+                    + " para cumplir esta meta: no puedes aportar más que eso.");
+        }
         BigDecimal libres = ahorroService.libres(usuarioId);
         if (datos.monto().compareTo(libres) > 0) {
             throw new ConflictoException(libres.signum() > 0

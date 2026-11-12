@@ -81,6 +81,7 @@ flowchart LR
 | Los movimientos y aportes no pueden tener fecha futura (sí pasada) | DTO (`@PastOrPresent`) y front | Se puede registrar un gasto olvidado, pero no inventar uno que no ocurrió |
 | La fecha límite de una meta no puede estar en el pasado | DTO (`@FutureOrPresent`) y front | Una meta es un objetivo a futuro |
 | Los aportes a metas salen de los ahorros libres (separado − retirado − aportado): no se puede aportar más | `MetaAhorroService` y front | No se puede guardar para una meta dinero que no se separó |
+| Una meta no recibe más de lo que le falta, y su objetivo no puede bajar de lo ya ahorrado | `MetaAhorroService` y front | Una meta cumplida está cumplida: no tiene sentido pasar del 100 % |
 | No se puede retirar de los ahorros más de lo libre (lo que está en metas no se retira) | `MovimientoService` y front | Primero se quita el aporte de la meta |
 | Los ahorros nunca quedan en negativo: borrar o rebajar un ahorro cuyo dinero ya está en una meta se rechaza | `AhorroService` (se valida después del cambio y la transacción se deshace) | El dinero de las metas tiene que haber salido de algún ahorro |
 | Separar a ahorros más de lo que hay en el saldo se avisa, no se bloquea | Front | Igual que un gasto: la app registra la realidad |
@@ -97,6 +98,9 @@ flowchart LR
 | Un pago en dólares o euros guarda el monto en soles **y** el monto y la moneda originales (los dos o ninguno); solo USD y EUR | `MovimientoRequest`, `MovimientoService` y restricciones `CHECK` en la base | Se ve "US$ 10.00" tal como se pagó, pero todos los totales siguen en soles |
 | El saldo inicial y los ahorros se registran siempre en soles | `MovimientoService` | Son movimientos internos del dinero del usuario |
 | Cada categoría tiene un ícono y un color de una lista fija (si no se indican: etiqueta gris; al editar sin indicarlos se conservan) | `CategoriaRequest` (`@Pattern` con `Categoria.ICONOS` y `Categoria.COLORES`) | El frontend sabe dibujar solo esos íconos y colores |
+| No se puede borrar ni cambiar de tipo una categoría usada por un automático (aunque aún no tenga movimientos) | `CategoriaService` | El automático cambiaría de gasto a ingreso sin aviso |
+| Máximo 5 contraseñas equivocadas por correo e IP cada 15 minutos, y 20 cuentas nuevas por IP cada hora (responde `429`) | `LimiteIntentos` y `AuthService` | Frena a quien intenta adivinar contraseñas o crear cuentas en masa |
+| El token de una cuenta eliminada deja de servir al instante | `JwtConfig` (validador del token) | Sin esto seguiría entrando hasta que el token venza (8 horas) |
 | "Hoy" se calcula con la hora de Perú (`America/Lima`) | `GamsFinanzasApplication` | El servidor en la nube usa UTC |
 
 ## Patrones de diseño
@@ -230,7 +234,7 @@ Cómo cumple cada forma normal:
 | POST | `/api/movimientos` | Con sesión | Registrar un movimiento |
 | PUT | `/api/movimientos/{id}` | Con sesión | Editar uno de mis movimientos |
 | DELETE | `/api/movimientos/{id}` | Con sesión | Eliminar uno de mis movimientos |
-| GET | `/api/recurrentes` | Con sesión | Mis movimientos automáticos (se repiten cada mes) |
+| GET | `/api/recurrentes` | Con sesión | Mis movimientos automáticos |
 | POST | `/api/recurrentes` | Con sesión | Crear un automático (diario, semanal, quincenal o mensual con día elegido); registra de una vez las fechas que ya llegaron |
 | PUT | `/api/recurrentes/{id}` | Con sesión | Editar, pausar o reanudar un automático |
 | DELETE | `/api/recurrentes/{id}` | Con sesión | Eliminar un automático (los movimientos ya registrados se conservan) |
@@ -265,7 +269,7 @@ Un gasto pagado en dólares (el cliente lo convierte con el tipo de cambio de es
 
 Los errores se devuelven en formato [ProblemDetail](https://www.rfc-editor.org/rfc/rfc9457) con el código HTTP
 correspondiente: `400` datos inválidos (con un mensaje por campo), `401` sin sesión o credenciales incorrectas,
-`403` el rol no tiene permiso, `404` no existe y `409` regla de negocio.
+`403` el rol no tiene permiso, `404` no existe, `409` regla de negocio y `429` demasiados intentos.
 
 ## Cómo ejecutar
 

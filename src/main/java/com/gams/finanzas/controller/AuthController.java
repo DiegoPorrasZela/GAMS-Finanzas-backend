@@ -18,6 +18,7 @@ import com.gams.finanzas.service.AuthService;
 import com.gams.finanzas.service.JwtService;
 import com.gams.finanzas.service.UsuarioService;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
@@ -34,13 +35,13 @@ public class AuthController {
 
     @PostMapping("/registro")
     @ResponseStatus(HttpStatus.CREATED)
-    public AuthResponse registrar(@Valid @RequestBody RegistroRequest datos) {
-        return authService.registrar(datos);
+    public AuthResponse registrar(@Valid @RequestBody RegistroRequest datos, HttpServletRequest peticion) {
+        return authService.registrar(datos, peticion.getRemoteAddr());
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest datos) {
-        return authService.login(datos);
+    public AuthResponse login(@Valid @RequestBody LoginRequest datos, HttpServletRequest peticion) {
+        return authService.login(datos, peticion.getRemoteAddr());
     }
 
     /** Datos del usuario de la sesión actual (sirve para comprobar que el token sigue siendo válido). */

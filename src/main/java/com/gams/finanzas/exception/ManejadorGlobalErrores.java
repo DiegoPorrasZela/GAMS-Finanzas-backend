@@ -57,6 +57,11 @@ public class ManejadorGlobalErrores extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(DemasiadosIntentosException.class)
+    public ProblemDetail demasiadosIntentos(DemasiadosIntentosException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+    }
+
     /** Respaldo por si la base de datos rechaza algo que el servicio no detectó (por ejemplo, un duplicado). */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail integridad(DataIntegrityViolationException ex) {

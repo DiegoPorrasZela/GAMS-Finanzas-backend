@@ -79,6 +79,8 @@ public class SecurityConfig {
         config.setAllowedOrigins(Arrays.asList(origenes));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // El navegador recuerda el permiso 1 hora: así no repite la consulta previa (preflight) en cada petición
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource fuente = new UrlBasedCorsConfigurationSource();
         fuente.registerCorsConfiguration("/api/**", config);

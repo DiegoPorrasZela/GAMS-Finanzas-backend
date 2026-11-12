@@ -21,6 +21,9 @@ public interface MovimientoRecurrenteRepository extends JpaRepository<Movimiento
 
     boolean existsByUsuarioId(Long usuarioId);
 
+    /** Para saber si una categoría está en uso aunque todavía no tenga movimientos registrados. */
+    boolean existsByCategoriaId(Long categoriaId);
+
     /**
      * Repeticiones activas con fechas que ya llegaron. Se bloquean (SELECT ... FOR UPDATE) para que dos
      * peticiones al mismo tiempo no registren el mismo movimiento dos veces.
