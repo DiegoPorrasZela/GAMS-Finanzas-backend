@@ -1,0 +1,19 @@
+# Lo que NO se copia a la imagen de Docker
+# Los secretos nunca van en la imagen: en Render se configuran como variables de entorno
+.env
+*.env
+# Se compila dentro de la imagen
+target/
+# Archivos del repositorio y de los editores
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.iml
+.mvn/
+mvnw
+mvnw.cmd
+*.log
+HELP.md
+README.md
