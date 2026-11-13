@@ -23,7 +23,8 @@ public class UsuarioService {
 
     @Transactional(readOnly = true)
     public List<UsuarioResponse> listar() {
-        return usuarioRepository.findAll(Sort.by("id")).stream()
+        // Usuario::getId en vez de "id": si la propiedad cambia de nombre, falla al compilar y no en ejecución
+        return usuarioRepository.findAll(Sort.by(Usuario::getId)).stream()
                 .map(UsuarioResponse::desde)
                 .toList();
     }
